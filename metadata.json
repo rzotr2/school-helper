@@ -1,0 +1,6 @@
+{
+  "name": "Meine Schule",
+  "description": "A personal digital school workspace for Berufsschule students",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

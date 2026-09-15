@@ -1,0 +1,161 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Global Helpers
+    function isSignedIn() { return request.auth != null; }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+
+    // School Profile Validation
+    function isValidSchoolProfile(data) {
+      return data.keys().hasAll(['createdAt', 'updatedAt']) &&
+             data.keys().size() == 2 &&
+             data.createdAt is timestamp &&
+             data.updatedAt is timestamp;
+    }
+
+    match /schoolProfiles/{userId} {
+      // Read: Only the owner can read their profile
+      allow get, list: if isSignedIn() && request.auth.uid == userId;
+
+      // Create
+      allow create: if isSignedIn() &&
+                    request.auth.uid == userId &&
+                    isValidId(userId) &&
+                    isValidSchoolProfile(incoming()) &&
+                    incoming().createdAt == request.time &&
+                    incoming().updatedAt == request.time;
+
+      // Update
+      allow update: if isSignedIn() &&
+                    request.auth.uid == userId &&
+                    isValidSchoolProfile(incoming()) &&
+                    incoming().diff(existing()).affectedKeys().hasOnly(['updatedAt']) &&
+                    incoming().createdAt == existing().createdAt &&
+                    incoming().updatedAt == request.time;
+
+      // Delete
+      allow delete: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Subject Validation
+    function isValidSubject(data) {
+      return data.keys().hasAll(['ownerId', 'name', 'position', 'createdAt', 'updatedAt']) &&
+             data.keys().size() == 5 &&
+             data.ownerId is string && data.ownerId.size() <= 128 && data.ownerId == request.auth.uid &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             data.position is number &&
+             data.createdAt is timestamp &&
+             data.updatedAt is timestamp;
+    }
+
+    match /subjects/{subjectId} {
+      // SECURE GET & LIST:
+      allow get: if isSignedIn() && (resource == null || resource.data.ownerId == request.auth.uid);
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+
+      // Create
+      allow create: if isSignedIn() &&
+                    isValidId(subjectId) &&
+                    isValidSubject(incoming()) &&
+                    exists(/databases/$(database)/documents/schoolProfiles/$(request.auth.uid)) &&
+                    incoming().createdAt == request.time &&
+                    incoming().updatedAt == request.time;
+
+      // Update
+      allow update: if isSignedIn() &&
+                    existing().ownerId == request.auth.uid &&
+                    isValidSubject(incoming()) &&
+                    incoming().ownerId == existing().ownerId &&
+                    incoming().createdAt == existing().createdAt &&
+                    incoming().diff(existing()).affectedKeys().hasOnly(['name', 'position', 'updatedAt']) &&
+                    incoming().updatedAt == request.time;
+
+      // Delete
+      allow delete: if isSignedIn() && existing().ownerId == request.auth.uid;
+    }
+
+    // Topic Validation
+    function isValidTopic(data) {
+      return data.keys().hasAll(['ownerId', 'subjectId', 'name', 'position', 'createdAt', 'updatedAt']) &&
+             data.keys().size() == 6 &&
+             data.ownerId is string && data.ownerId.size() <= 128 && data.ownerId == request.auth.uid &&
+             data.subjectId is string && data.subjectId.size() <= 128 &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             data.position is number &&
+             data.createdAt is timestamp &&
+             data.updatedAt is timestamp;
+    }
+
+    match /topics/{topicId} {
+      allow get: if isSignedIn() && (resource == null || resource.data.ownerId == request.auth.uid);
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+
+      allow create: if isSignedIn() &&
+                    isValidId(topicId) &&
+                    isValidTopic(incoming()) &&
+                    // Ensure the referenced subject belongs to the requesting user
+                    get(/databases/$(database)/documents/subjects/$(incoming().subjectId)).data.ownerId == request.auth.uid &&
+                    incoming().createdAt == request.time &&
+                    incoming().updatedAt == request.time;
+
+      allow update: if isSignedIn() &&
+                    existing().ownerId == request.auth.uid &&
+                    isValidTopic(incoming()) &&
+                    incoming().ownerId == existing().ownerId &&
+                    incoming().subjectId == existing().subjectId &&
+                    incoming().createdAt == existing().createdAt &&
+                    incoming().diff(existing()).affectedKeys().hasOnly(['name', 'position', 'updatedAt']) &&
+                    incoming().updatedAt == request.time;
+
+      allow delete: if isSignedIn() && existing().ownerId == request.auth.uid;
+    }
+
+    // Document Validation
+    function isValidDocument(data) {
+      return data.keys().hasAll(['ownerId', 'topicId', 'originalName', 'storagePath', 'mimeType', 'size', 'createdAt', 'updatedAt']) &&
+             data.keys().size() == 8 &&
+             data.ownerId is string && data.ownerId.size() <= 128 && data.ownerId == request.auth.uid &&
+             data.topicId is string && data.topicId.size() <= 128 &&
+             data.originalName is string && data.originalName.size() > 0 && data.originalName.size() <= 255 &&
+             data.storagePath is string && data.storagePath.size() > 0 && data.storagePath.size() <= 500 &&
+             data.mimeType == 'application/pdf' &&
+             data.size is number && data.size > 0 &&
+             data.createdAt is timestamp &&
+             data.updatedAt is timestamp;
+    }
+
+    match /documents/{documentId} {
+      allow get: if isSignedIn() && (resource == null || resource.data.ownerId == request.auth.uid);
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+
+      allow create: if isSignedIn() &&
+                    isValidId(documentId) &&
+                    isValidDocument(incoming()) &&
+                    // Ensure the referenced topic belongs to the requesting user
+                    get(/databases/$(database)/documents/topics/$(incoming().topicId)).data.ownerId == request.auth.uid &&
+                    incoming().createdAt == request.time &&
+                    incoming().updatedAt == request.time;
+
+      allow update: if isSignedIn() &&
+                    existing().ownerId == request.auth.uid &&
+                    isValidDocument(incoming()) &&
+                    incoming().ownerId == existing().ownerId &&
+                    incoming().storagePath == existing().storagePath &&
+                    incoming().mimeType == existing().mimeType &&
+                    incoming().size == existing().size &&
+                    incoming().createdAt == existing().createdAt &&
+                    incoming().diff(existing()).affectedKeys().hasOnly(['originalName', 'topicId', 'updatedAt']) &&
+                    incoming().updatedAt == request.time &&
+                    (incoming().topicId == existing().topicId || get(/databases/$(database)/documents/topics/$(incoming().topicId)).data.ownerId == request.auth.uid);
+
+      allow delete: if isSignedIn() && existing().ownerId == request.auth.uid;
+    }
+  }
+}
