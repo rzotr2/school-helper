@@ -13,6 +13,12 @@ import type { TextQuality } from './types';
  * - Text that is mostly letters and digits but has no visible structure
  *   ("||| l l l |||") passes. Distinguishing that from short labels is not
  *   possible deterministically, and keeping it loses nothing.
+ * - Text that is mostly mathematical symbols (a formula sheet) passes when
+ *   it is otherwise well-formed: symbols are printable characters, and a
+ *   low alphanumeric ratio is recorded as a diagnostic but does not block.
+ *   Only strong corruption evidence (replacement characters, non-printable
+ *   content) forces OCR, because OCR would misread the symbols the native
+ *   layer already contains.
  */
 export const TEXT_QUALITY_THRESHOLDS = {
   /** Minimum number of characters in the trimmed text. */
@@ -85,29 +91,36 @@ export function evaluateTextQuality(text: string): TextQuality {
     reasons: [],
   };
 
+  // Hard blockers: strong evidence that the text layer is missing or
+  // corrupted. Only these make the text unusable (and route it to OCR).
+  const blockers: string[] = [];
+
   if (charCount === 0) {
-    quality.reasons.push('No text');
+    blockers.push('No text');
   } else {
     if (charCount < TEXT_QUALITY_THRESHOLDS.minCharCount) {
-      quality.reasons.push('Too little text');
+      blockers.push('Too little text');
     }
     if (replacementCharCount / charCount > TEXT_QUALITY_THRESHOLDS.maxReplacementCharRatio) {
-      quality.reasons.push('Corrupted encoding (replacement characters)');
+      blockers.push('Corrupted encoding (replacement characters)');
     }
     if (quality.printableRatio < TEXT_QUALITY_THRESHOLDS.minPrintableRatio) {
-      quality.reasons.push('Mostly non-printable characters');
+      blockers.push('Mostly non-printable characters');
     }
     if (quality.whitespaceRatio > TEXT_QUALITY_THRESHOLDS.maxWhitespaceRatio) {
-      quality.reasons.push('Mostly whitespace');
+      blockers.push('Mostly whitespace');
     }
+    // Diagnostic only: symbol-heavy text (e.g. a formula sheet) is
+    // well-formed, not corrupted, and OCR would misread the symbols.
     if (quality.alphanumericRatio < TEXT_QUALITY_THRESHOLDS.minAlphanumericRatio) {
       quality.reasons.push('Too few alphanumeric characters');
     }
     if (wordCount < TEXT_QUALITY_THRESHOLDS.minWordCount) {
-      quality.reasons.push('Too few words');
+      blockers.push('Too few words');
     }
   }
 
-  quality.usable = quality.reasons.length === 0;
+  quality.reasons.push(...blockers);
+  quality.usable = blockers.length === 0;
   return quality;
 }

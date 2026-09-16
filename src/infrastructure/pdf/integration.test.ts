@@ -14,14 +14,19 @@ import { describe, it, expect } from 'vitest';
 import { createCanvas } from '@napi-rs/canvas';
 import { PdfCancellationError, PdfInspectionError } from './errors';
 import { inspectPdf } from './inspect';
+import { loadPdfDocument, releasePdfDocument } from './load';
+import { renderPdfPage } from './render';
 import type { OcrCanvasFactory } from './types';
 
 // ── Node canvas adapter ────────────────────────────────────────────────────
+//
+// @napi-rs/canvas implements the drawing calls pdf.js uses, but its TS types
+// differ from the DOM's: SKRSContext2D has its own TextMetrics etc., and
+// Canvas is not an HTMLCanvasElement. The casts below exist only to bridge
+// that type gap in Node tests.
 
 const nodeCanvasFactory: OcrCanvasFactory = (width, height) => {
   const canvas = createCanvas(width, height);
-  // SKRSContext2D implements the drawing calls pdf.js uses, but its TS type
-  // differs from the DOM's CanvasRenderingContext2D (own TextMetrics etc.).
   const context = canvas.getContext('2d') as unknown as CanvasRenderingContext2D;
   // toImage is deferred: the PNG must be captured after pdf.js has rendered.
   return { context, toImage: () => canvas.toBuffer('image/png') };
@@ -39,6 +44,8 @@ interface ImageFixture {
 
 interface FixturePage {
   textLines?: string[];
+  /** Text drawn near the bottom-right corner of the page. */
+  bottomTextLines?: string[];
   image?: ImageFixture;
   withAnnotation?: boolean;
 }
@@ -73,10 +80,13 @@ function buildPdf(pages: FixturePage[]): Buffer {
     let contentsReference = '';
 
     if (page.textLines) {
-      const lines = page.textLines
+      const topLines = page.textLines
         .map((line, index) => `BT /F1 14 Tf 72 ${760 - index * 24} Td (${line}) Tj ET`)
         .join('\n');
-      const content = Buffer.from(lines, 'latin1');
+      const bottomLines = (page.bottomTextLines ?? [])
+        .map((line, index) => `BT /F1 14 Tf 420 ${40 + index * 20} Td (${line}) Tj ET`)
+        .join('\n');
+      const content = Buffer.from([topLines, bottomLines].filter(Boolean).join('\n'), 'latin1');
       pushObject(
         contentNumber,
         Buffer.concat([
@@ -177,6 +187,16 @@ const TEXT_LINES = [
 
 function textPdf(withAnnotation = false): Buffer {
   return buildPdf([{ textLines: TEXT_LINES, withAnnotation }]);
+}
+
+/** Text spread over the whole page: top-left and bottom-right lines. */
+function fullPageTextPdf(): Buffer {
+  return buildPdf([
+    {
+      textLines: ['Oben links: erste Zeile.'],
+      bottomTextLines: ['Unten rechts: letzte Zeile.'],
+    },
+  ]);
 }
 
 function scannedPdf(): Buffer {
@@ -312,6 +332,45 @@ describe.skipIf(!runIntegration)(
           signal: AbortSignal.abort(),
         }),
       ).rejects.toBeInstanceOf(PdfCancellationError);
+    });
+
+    it('sizes the canvas backing store to the render viewport (full-page render)', async () => {
+      const { task, doc } = await loadPdfDocument(fullPageTextPdf());
+      try {
+        const page = await doc.getPage(1);
+        const scale = 2;
+        const viewport = page.getViewport({ scale });
+        // Starts at the HTML default size, like a fresh <canvas> element in
+        // the browser. Cast bridges the @napi-rs Canvas type (see adapter).
+        const canvas = createCanvas(300, 150) as unknown as HTMLCanvasElement;
+
+        const renderTask = renderPdfPage(page, canvas, scale);
+        await renderTask.promise;
+
+        // The backing store must match the render viewport, not the default.
+        expect(canvas.width).toBe(Math.floor(viewport.width));
+        expect(canvas.height).toBe(Math.floor(viewport.height));
+
+        // Content near the bottom-right of the page (far beyond the default
+        // 300x150 bitmap) must actually be painted: probe the region around
+        // the bottom-right text line for ink.
+        const context = canvas.getContext('2d');
+        if (context === null) {
+          throw new Error('Failed to create canvas context for the render test');
+        }
+        const probe = context.getImageData(
+          Math.floor(viewport.width * 0.55),
+          Math.floor(viewport.height * 0.88),
+          Math.floor(viewport.width * 0.4),
+          Math.floor(viewport.height * 0.1),
+        ).data;
+        const hasInk = Array.from({ length: probe.length / 4 }, (_, index) => probe[index * 4]).some(
+          (red) => red < 200,
+        );
+        expect(hasInk).toBe(true);
+      } finally {
+        await releasePdfDocument(task);
+      }
     });
   },
 );

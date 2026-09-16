@@ -30,7 +30,11 @@ export interface TextQuality {
   wordCount: number;
   /** Count of U+FFFD replacement characters (a strong corruption signal). */
   replacementCharCount: number;
-  /** Human-readable reasons why the text was deemed unusable (empty when usable). */
+  /**
+   * Human-readable quality findings. Hard blockers (which make the text
+   * unusable) plus diagnostics such as a low alphanumeric ratio, which do
+   * not. Empty when no finding applies.
+   */
   reasons: string[];
 }
 

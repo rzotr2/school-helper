@@ -13,10 +13,15 @@ import { AuthProvider, useAuth } from './infrastructure/auth/AuthContext';
 import { Button } from './ui/components/Button';
 import { BookOpen } from 'lucide-react';
 
-// Lazy-loaded so the main bundle doesn't pay for pdf.js + Tesseract.js
-// (a development tool, not part of the regular app flow).
+// Lazy-loaded so the main bundle doesn't pay for pdf.js + Tesseract.js:
+// the document viewer and the inspection development tool are optional flows.
 const PdfInspectPage = lazy(() =>
   import('./ui/pages/PdfInspectPage').then((module) => ({ default: module.PdfInspectPage })),
+);
+const DocumentViewerPage = lazy(() =>
+  import('./ui/pages/DocumentViewerPage').then((module) => ({
+    default: module.DocumentViewerPage,
+  })),
 );
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -57,6 +62,20 @@ export default function App() {
             <Route index element={<Home />} />
             <Route path="subject/:subjectId" element={<SubjectPage />} />
             <Route path="subject/:subjectId/topic/:topicId" element={<TopicPage />} />
+            <Route
+              path="document/:documentId"
+              element={
+                <Suspense
+                  fallback={
+                    <div className="flex items-center justify-center min-h-[400px]">
+                      <div className="w-8 h-8 rounded-full border-2 border-slate-200 border-t-blue-600 animate-spin"></div>
+                    </div>
+                  }
+                >
+                  <DocumentViewerPage />
+                </Suspense>
+              }
+            />
             {/* Development tool for the local PDF inspection pipeline (not in the sidebar). */}
             <Route
               path="pdf-inspect"

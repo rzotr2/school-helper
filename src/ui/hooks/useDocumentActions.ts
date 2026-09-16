@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Document,
   deleteDocument,
-  getDocumentDownloadUrl,
   moveDocument,
   renameDocument,
 } from '../../application/use-cases/documents';
@@ -26,22 +26,19 @@ export function useDocumentActions(
   setDocuments: Dispatch<SetStateAction<Document[]>>,
   options: UseDocumentActionsOptions = {},
 ) {
+  const navigate = useNavigate();
   const [actionError, setActionError] = useState<string | null>(null);
   const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
   const [renamingDoc, setRenamingDoc] = useState<Document | null>(null);
   const [movingDoc, setMovingDoc] = useState<Document | null>(null);
   const [docToDelete, setDocToDelete] = useState<Document | null>(null);
 
-  const handleOpenDocument = async (docId: string) => {
+  const handleOpenDocument = (docId: string) => {
     if (!userId) return;
     setActionError(null);
-    try {
-      const url = await getDocumentDownloadUrl(userId, docId);
-      window.open(url, '_blank', 'noopener,noreferrer');
-    } catch (err) {
-      console.error('Failed to open document', err);
-      setActionError('Dokument konnte nicht geöffnet werden.');
-    }
+    // Opening happens in the internal PDF viewer (route /document/:id);
+    // the signed URL never leaves the application layer.
+    navigate(`/document/${docId}`);
   };
 
   const handleDeleteDocument = async (docId: string) => {

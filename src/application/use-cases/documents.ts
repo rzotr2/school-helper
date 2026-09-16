@@ -185,6 +185,17 @@ export async function deleteDocument(userId: string, documentId: string): Promis
   if (deleteError) throw new Error(deleteError.message);
 }
 
+/** Creates a short-lived signed URL for a document's storage object. */
+async function createDocumentSignedUrl(storagePath: string): Promise<string> {
+  const { data, error } = await supabase.storage
+    .from('documents')
+    .createSignedUrl(storagePath, 3600);
+
+  if (error) throw new Error(error.message);
+
+  return data.signedUrl;
+}
+
 /**
  * Returns a short-lived signed URL for the document's storage object.
  */
@@ -200,13 +211,46 @@ export async function getDocumentDownloadUrl(userId: string, documentId: string)
   if (fetchError) throw new Error(fetchError.message);
   if (!document) throw new Error('Document not found');
 
-  const { data, error } = await supabase.storage
+  return createDocumentSignedUrl(document.storage_path);
+}
+
+/**
+ * Downloads the document's PDF bytes through its private signed URL and
+ * returns them together with the document metadata.
+ *
+ * This is a pure application-level operation: no PDF.js, no inspection,
+ * no OCR, no object URLs. The signed URL is used only here to fetch the
+ * blob and never reaches the UI; the viewer renders the Blob locally.
+ * Network failures and aborts propagate as raw errors for the caller to
+ * map (an aborted fetch rejects with AbortError, so cancellation stays
+ * distinguishable).
+ */
+export async function downloadDocument(
+  userId: string,
+  documentId: string,
+  signal?: AbortSignal,
+): Promise<{ document: Document; blob: Blob }> {
+  if (!userId) throw new Error('User must be authenticated');
+
+  // Ownership-safe metadata query: RLS hides rows owned by others, so
+  // absence of the row is indistinguishable from "another user's document".
+  const { data: row, error: fetchError } = await supabase
     .from('documents')
-    .createSignedUrl(document.storage_path, 3600);
+    .select(DOCUMENT_COLUMNS)
+    .eq('id', documentId)
+    .maybeSingle();
 
-  if (error) throw new Error(error.message);
+  if (fetchError) throw new Error(fetchError.message);
+  if (!row) throw new Error('Document not found');
 
-  return data.signedUrl;
+  const signedUrl = await createDocumentSignedUrl(row.storage_path);
+  const response = await fetch(signedUrl, { signal });
+
+  if (!response.ok) {
+    throw new Error('Failed to download document');
+  }
+
+  return { document: mapDocument(row), blob: await response.blob() };
 }
 
 export function normalizeDocumentName(name: string): string {

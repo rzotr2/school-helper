@@ -1,9 +1,7 @@
-// The legacy build runs in the browser and in Node and falls back to
-// pdf.js's built-in fake worker, so no worker script configuration is
-// needed here. Offloading to a real worker is a future optimization.
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist';
 import { PdfInspectionError, throwIfAborted } from './errors';
+import { loadPdfDocument, releasePdfDocument } from './load';
 import { ocrPdfPages } from './ocr';
 import { evaluateTextQuality } from './textQuality';
 import type {
@@ -80,20 +78,6 @@ function mapAnnotation(pageNumber: number, annotation: RawPdfAnnotation): PdfAnn
   };
 }
 
-function toUint8Array(input: Blob | ArrayBuffer | Uint8Array): Promise<Uint8Array> {
-  if (input instanceof Blob) {
-    return input.arrayBuffer().then((buffer) => new Uint8Array(buffer));
-  }
-  if (input instanceof Uint8Array) {
-    // pdf.js rejects Node Buffers: copy into a plain Uint8Array.
-    if (typeof Buffer !== 'undefined' && input instanceof Buffer) {
-      return Promise.resolve(new Uint8Array(input));
-    }
-    return Promise.resolve(input);
-  }
-  return Promise.resolve(new Uint8Array(input));
-}
-
 /**
  * Document-level extraction method from the per-page methods.
  * Pure helper, exported for tests.
@@ -109,35 +93,26 @@ export function deriveExtractionMethod(
 }
 
 /**
- * Inspects a PDF completely locally: extracts the native text layer page by
- * page, evaluates its quality with the deterministic heuristic, collects
- * per-page annotations, and OCRs the pages whose native text is unusable.
+ * Inspects an already loaded PDF completely locally: extracts the native
+ * text layer page by page, evaluates its quality with the deterministic
+ * heuristic, collects per-page annotations, and OCRs the pages whose
+ * native text is unusable.
+ *
+ * Does not own the document: the caller loads it (loadPdfDocument) and
+ * releases it (releasePdfDocument), so one load can serve both the
+ * inspection and page rendering.
  *
  * Rejections are always PdfInspectionError, or PdfCancellationError when
  * the signal aborts. Raw library errors are logged and mapped to messages
  * that are safe to show.
  */
-export async function inspectPdf(
-  input: Blob | ArrayBuffer | Uint8Array,
+export async function inspectPdfDocument(
+  doc: PDFDocumentProxy,
   options: PdfInspectOptions = {},
 ): Promise<PdfInspectionResult> {
   const { signal, onProgress } = options;
-  throwIfAborted(signal);
 
-  const data = await toUint8Array(input);
-  throwIfAborted(signal);
-
-  const loadingTask = pdfjs.getDocument({ data });
-  let doc: PDFDocumentProxy;
-  try {
-    doc = await loadingTask.promise;
-  } catch (err) {
-    console.error('Failed to load PDF', err);
-    throw new PdfInspectionError('Invalid PDF file');
-  }
-
-  try {
-    const pageCount = doc.numPages;
+  const pageCount = doc.numPages;
     const pages: PdfPageInspection[] = [];
     const annotations: PdfAnnotation[] = [];
 
@@ -214,12 +189,25 @@ export async function inspectPdf(
       extractionMethod: deriveExtractionMethod(pages.map((page) => page.extractionMethod)),
       hasUsableText: pages.some((page) => page.quality.usable),
     };
+}
+
+/**
+ * Loads and inspects a PDF completely locally (see inspectPdfDocument).
+ * The document is released when the inspection finishes, succeeds or fails.
+ */
+export async function inspectPdf(
+  input: Blob | ArrayBuffer | Uint8Array,
+  options: PdfInspectOptions = {},
+): Promise<PdfInspectionResult> {
+  const { signal } = options;
+  throwIfAborted(signal);
+
+  const { task, doc } = await loadPdfDocument(input);
+  try {
+    throwIfAborted(signal);
+    return await inspectPdfDocument(doc, options);
   } finally {
     // In pdf.js v6 the loading task owns the worker and the document.
-    try {
-      await loadingTask.destroy();
-    } catch (err) {
-      console.error('Failed to release the PDF document', err);
-    }
+    await releasePdfDocument(task);
   }
 }

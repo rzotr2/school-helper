@@ -59,11 +59,41 @@ describe('evaluateTextQuality', () => {
     expect(quality.replacementCharCount).toBe(5);
   });
 
-  it('rejects OCR-like noise without letters or digits', () => {
+  it('rejects symbol noise without words', () => {
+    // Mostly symbols and punctuation. The low alphanumeric ratio is only a
+    // diagnostic; rejection here comes from the missing words.
     const quality = evaluateTextQuality('|/\\|)(^%$#@!');
     expect(quality.usable).toBe(false);
+    expect(quality.reasons).toContain('Too few words');
     expect(quality.reasons).toContain('Too few alphanumeric characters');
     expect(quality.alphanumericRatio).toBe(0);
+  });
+
+  it('accepts formula-heavy native text (symbol-heavy is not corrupted)', () => {
+    const quality = evaluateTextQuality(
+      'f(x) = ax² + bx + c\n' +
+        'x₁,₂ = (−b ± √(b² − 4ac)) / (2a)\n' +
+        'sin²(α) + cos²(α) = 1\n' +
+        '∫ xⁿ dx = xⁿ⁺¹ / (n+1) + C',
+    );
+    expect(quality.usable).toBe(true);
+    expect(quality.alphanumericRatio).toBeLessThan(TEXT_QUALITY_THRESHOLDS.minAlphanumericRatio);
+    expect(quality.reasons).toContain('Too few alphanumeric characters');
+    expect(quality.replacementCharCount).toBe(0);
+    expect(quality.printableRatio).toBeGreaterThanOrEqual(
+      TEXT_QUALITY_THRESHOLDS.minPrintableRatio,
+    );
+  });
+
+  it('accepts valid symbol-heavy native text', () => {
+    const quality = evaluateTextQuality(
+      '⇒ ∀ x ≥ 0: √x ≥ 0 ∎  ⇔ ∃! n ∈ ℕ: n > 1  Σ ≤ ≠ ± ∞ ≈  ∫₂^∞ dx/x² = 1  ⊕ ⊗ ∅ ∪ ∩',
+    );
+    expect(quality.usable).toBe(true);
+    expect(quality.alphanumericRatio).toBeLessThan(TEXT_QUALITY_THRESHOLDS.minAlphanumericRatio);
+    expect(quality.reasons).toContain('Too few alphanumeric characters');
+    expect(quality.replacementCharCount).toBe(0);
+    expect(quality.wordCount).toBeGreaterThanOrEqual(2);
   });
 
   it('rejects text below the minimum length', () => {
