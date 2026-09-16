@@ -27,9 +27,8 @@ Document intelligence (classification, summaries, search, learning assistance) i
 - React 19, TypeScript, Vite 6
 - Tailwind CSS 4, lucide-react
 - React Router 7
-- Firebase: Authentication (Google), Firestore, Storage
-- Vitest + Firebase Emulator Suite for security-rule and integration tests
-- ESLint; package manager: **npm** (`package-lock.json` is canonical)
+- Supabase: Auth (Google only), PostgreSQL with RLS, Storage (private bucket, signed URLs)
+- Vitest for unit tests; ESLint; package manager: **npm** (`package-lock.json` is canonical)
 
 ## Architecture
 
@@ -38,21 +37,22 @@ UI (src/ui)
 ↓
 Application / Use Cases (src/application/use-cases)
 ↓
-Infrastructure (src/infrastructure: firebase config, auth)
+Infrastructure (src/infrastructure: supabase client, auth)
 ↓
-Firebase
+Supabase (Auth, PostgreSQL, Storage)
 ```
 
-UI calls use cases; Firestore business logic lives in `src/application/use-cases`, never in UI components.
+UI calls use cases; business logic lives in `src/application/use-cases`, never in UI components.
+See `supabase-architecture.md` for the database schema, RLS policy matrix and Storage conventions.
 
 ## Data model
 
-| Collection | Path | Key fields |
-|---|---|---|
-| School profile | `schoolProfiles/{userId}` | `createdAt`, `updatedAt` |
-| Subjects | `subjects/{subjectId}` | `ownerId`, `name`, `position`, timestamps |
-| Topics | `topics/{topicId}` | `ownerId`, `subjectId`, `name`, `position`, timestamps |
-| Documents | `documents/{documentId}` | `ownerId`, `topicId`, `originalName`, `storagePath`, `mimeType`, `size`, timestamps |
+| Table | Key fields |
+|---|---|
+| `profiles` | `id` (→ auth.users), `created_at`, `updated_at` |
+| `subjects` | `id`, `owner_id`, `name`, `position`, timestamps |
+| `topics` | `id`, `owner_id`, `subject_id`, `name`, `position`, timestamps |
+| `documents` | `id`, `owner_id`, `topic_id`, `original_name`, `storage_path`, `mime_type`, `size`, timestamps |
 
 Storage path: `users/{userId}/documents/{documentId}.pdf` — it stays fixed when a document is renamed or moved.
 
@@ -60,10 +60,12 @@ Storage path: `users/{userId}/documents/{documentId}.pdf` — it stays fixed whe
 
 ```bash
 npm install
-npm run dev        # http://localhost:3000
+cp .env.example .env   # fill in VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY
+npm run dev            # http://localhost:3000
 ```
 
-Firebase config lives in `firebase-applet-config.json` (project, Firestore database, storage bucket).
+Supabase configuration lives in the project dashboard, not in the repo. Database schema and
+security policies are the SQL migrations in `supabase/migrations/`.
 
 ### Commands
 
@@ -71,27 +73,23 @@ Firebase config lives in `firebase-applet-config.json` (project, Firestore datab
 |---|---|
 | `npm run dev` | Vite dev server on port 3000 |
 | `npm run build` | Production build |
-| `npm run lint` | `tsc --noEmit` + ESLint (incl. Firebase security-rules linting) |
-| `npm test` | Vitest — requires the Firebase emulators running (see below) |
+| `npm run lint` | `tsc --noEmit` + ESLint |
+| `npm test` | Vitest unit tests (no external services required) |
 | `npm run clean` | Remove `dist/` |
-
-### Firebase Emulator Suite
-
-The test suite (73 tests in 5 files at the repo root) covers Firestore rules, Storage rules, cascade deletion, the global library, and document management against real emulators.
-
-```bash
-npx firebase emulators:start --only firestore,storage
-npm test    # in a second terminal
-```
-
-**The emulators require a Java runtime** (`java -version` must work). Tests connect to Firestore on `127.0.0.1:8080` and Storage on `127.0.0.1:9199` (see `firebase.json`).
 
 ## Security model
 
 Defense in depth, all data private:
 
-1. **Application layer** — every use case verifies ownership (`ownerId`) before reads/writes.
-2. **Firestore rules** (`firestore.rules`) — deny-by-default global rule; per-collection validation; users can only access their own data; documents validate topic ownership on create/move. Fields `ownerId`, `storagePath`, `mimeType`, `size`, `createdAt` are immutable after creation.
-3. **Storage rules** (`storage.rules`) — only the owning user can read/write `users/{userId}/documents/*`; PDF only, 10 MB max.
+1. **Application layer** — every use case verifies ownership (`owner_id`) before reads/writes.
+2. **PostgreSQL RLS** (`supabase/migrations/0001_init.sql`) — deny-by-default; users can only
+   access their own rows; cross-table ownership checks on insert/update; immutability triggers
+   protect `owner_id`, `storage_path`, `mime_type`, `size`, `created_at`; `ON DELETE CASCADE`
+   from auth.users down through subjects, topics and documents.
+3. **Storage** (`supabase/migrations/0002_storage.sql`) — private bucket `documents`
+   (10 MB per file, `application/pdf` only); folder-scoped policies restrict each user to
+   `users/{userId}/documents/...`; no update policy (paths are immutable); downloads use
+   short-lived signed URLs, never public URLs.
 
-Any security-rule change must be accompanied by passing emulator tests.
+The SQL migrations are the source of truth for the security model — any change must go
+through them.

@@ -1,8 +1,0 @@
-[
-  {
-    "origin": ["http://localhost:3000"],
-    "method": ["GET", "POST", "DELETE"],
-    "responseHeader": ["X-Goog-Upload-URL", "X-Goog-Upload-Status", "X-Goog-Upload-Size-Received"],
-    "maxAgeSeconds": 3600
-  }
-]

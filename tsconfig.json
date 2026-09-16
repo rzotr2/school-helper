@@ -17,15 +17,5 @@
     "jsx": "react-jsx",
     "allowImportingTsExtensions": true,
     "noEmit": true
-  },
-  // Legacy Firebase emulator suites (replaced by Supabase security tests in
-  // Stage 6). They need the old Firebase signatures and are removed with the
-  // rest of Firebase in Stage 7; excluded from vitest in vitest.config.ts.
-  "exclude": [
-    "cascade-deletion.test.ts",
-    "document-management.test.ts",
-    "firestore.rules.test.ts",
-    "global-documents.test.ts",
-    "storage.rules.test.ts"
-  ]
+  }
 }
