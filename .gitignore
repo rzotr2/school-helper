@@ -13,3 +13,6 @@ CLAUDE.md
 AGENTS.md
 .cursor/
 .gemini/
+
+# Tesseract.js language data cache (downloaded at runtime)
+*.traineddata
