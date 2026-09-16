@@ -45,8 +45,8 @@ export function NameDialog({
     try {
       await onSubmit(name);
       onClose();
-    } catch (err: any) {
-      setError(err.message || 'Ein Fehler ist aufgetreten');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message || 'Ein Fehler ist aufgetreten' : 'Ein Fehler ist aufgetreten');
     } finally {
       setIsSubmitting(false);
     }

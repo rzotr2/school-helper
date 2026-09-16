@@ -64,7 +64,7 @@ export function SubjectPage() {
     try {
       await deleteSubject(user.id, subject.id);
       window.location.href = '/'; 
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Failed to delete subject", err);
       setError("Fehler beim Löschen des Fachs. Bitte erneut versuchen.");
       setIsDeleteDialogOpen(false);
@@ -90,7 +90,7 @@ export function SubjectPage() {
       await deleteTopic(user.id, deletingTopic.id);
       setDeletingTopic(null);
       await loadData();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Failed to delete topic", err);
       setError("Fehler beim Löschen des Themas. Bitte erneut versuchen.");
       setDeletingTopic(null);

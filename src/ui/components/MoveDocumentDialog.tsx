@@ -53,8 +53,8 @@ export function MoveDocumentDialog({
     try {
       await onMove(selectedTopicId);
       onClose();
-    } catch (err: any) {
-      setError(err.message || 'Fehler beim Verschieben des Dokuments.');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message || 'Fehler beim Verschieben des Dokuments.' : 'Fehler beim Verschieben des Dokuments.');
     } finally {
       setIsSubmitting(false);
     }

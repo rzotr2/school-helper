@@ -90,8 +90,8 @@ export function TopicPage() {
         (progress) => setUploadProgress(Math.round(progress))
       );
       setDocuments(prev => [newDoc, ...prev]);
-    } catch (err: any) {
-      setUploadError(err.message || 'Fehler beim Hochladen');
+    } catch (err: unknown) {
+      setUploadError(err instanceof Error ? err.message || 'Fehler beim Hochladen' : 'Fehler beim Hochladen');
     } finally {
       setIsUploading(false);
       setUploadProgress(0);

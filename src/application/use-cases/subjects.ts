@@ -61,16 +61,31 @@ export async function createSubject(userId: string, name: string, position: numb
 }
 
 /**
- * Renames the given subject. Ownership is enforced by RLS (the update
- * silently affects no rows if the subject belongs to another user).
+ * Renames the given subject. RLS hides rows owned by others, so absence of
+ * the row is indistinguishable from "another user's subject".
  */
 export async function updateSubject(userId: string, subjectId: string, name: string): Promise<void> {
+  if (!userId) {
+    throw new Error('User must be authenticated');
+  }
+
   if (!name.trim()) {
     throw new Error('Subject name cannot be empty');
   }
   if (name.length > 100) {
     throw new Error('Subject name is too long');
   }
+
+  // Ownership check: RLS hides rows owned by others, so absence of the row
+  // means either the subject does not exist or it belongs to another user.
+  const { data: subject, error: subjectError } = await supabase
+    .from('subjects')
+    .select('id')
+    .eq('id', subjectId)
+    .maybeSingle();
+
+  if (subjectError) throw new Error(subjectError.message);
+  if (!subject) throw new Error('Subject not found');
 
   const { error } = await supabase
     .from('subjects')
