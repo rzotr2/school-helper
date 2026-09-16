@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Loader2, ChevronRight, Folder, FileText, Upload, Trash2, ExternalLink, Edit2, FolderInput, AlertCircle, X } from 'lucide-react';
 import { Button } from '../components/Button';
 import { NameDialog } from '../components/NameDialog';
 import { MoveDocumentDialog } from '../components/MoveDocumentDialog';
+import { DeleteDialog } from '../components/DeleteDialog';
 import { Document, getDocumentsForTopic, uploadDocument, deleteDocument, getDocumentDownloadUrl, renameDocument, moveDocument } from '../../application/use-cases/documents';
 import { useAuth } from '../../infrastructure/auth/AuthContext';
 import { Subject, getSubjects } from '../../application/use-cases/subjects';
@@ -28,6 +29,8 @@ export function TopicPage() {
   const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
   const [renamingDoc, setRenamingDoc] = useState<Document | null>(null);
   const [movingDoc, setMovingDoc] = useState<Document | null>(null);
+  const [docToDelete, setDocToDelete] = useState<Document | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -36,10 +39,10 @@ export function TopicPage() {
       setError(null);
       try {
         const [subjects, topics, loadedDocs, foundTopic] = await Promise.all([
-          getSubjects(user.uid),
-          getAllTopics(user.uid),
-          getDocumentsForTopic(user.uid, topicId),
-          getTopic(user.uid, topicId)
+          getSubjects(user.id),
+          getAllTopics(user.id),
+          getDocumentsForTopic(user.id, topicId),
+          getTopic(user.id, topicId)
         ]);
         
         const foundSubject = subjects.find(s => s.id === subjectId);
@@ -81,7 +84,7 @@ export function TopicPage() {
 
     try {
       const newDoc = await uploadDocument(
-        user.uid,
+        user.id,
         topic.id,
         file,
         (progress) => setUploadProgress(Math.round(progress))
@@ -100,7 +103,7 @@ export function TopicPage() {
     setActionError(null);
     setDeletingDocId(docId);
     try {
-      await deleteDocument(user.uid, docId);
+      await deleteDocument(user.id, docId);
       setDocuments(prev => prev.filter(d => d.id !== docId));
     } catch (err) {
       console.error('Failed to delete document', err);
@@ -114,7 +117,7 @@ export function TopicPage() {
     if (!user) return;
     setActionError(null);
     try {
-      const url = await getDocumentDownloadUrl(user.uid, docId);
+      const url = await getDocumentDownloadUrl(user.id, docId);
       window.open(url, '_blank', 'noopener,noreferrer');
     } catch (err) {
       console.error('Failed to open document', err);
@@ -125,7 +128,7 @@ export function TopicPage() {
   const handleRenameDocument = async (newName: string) => {
     if (!user || !renamingDoc) return;
     setActionError(null);
-    const updated = await renameDocument(user.uid, renamingDoc.id, newName);
+    const updated = await renameDocument(user.id, renamingDoc.id, newName);
     setDocuments(prev => prev.map(d => d.id === updated.id ? updated : d));
     setRenamingDoc(null);
   };
@@ -133,7 +136,7 @@ export function TopicPage() {
   const handleMoveDocument = async (targetTopicId: string) => {
     if (!user || !movingDoc) return;
     setActionError(null);
-    await moveDocument(user.uid, movingDoc.id, targetTopicId);
+    await moveDocument(user.id, movingDoc.id, targetTopicId);
     if (targetTopicId !== topicId) {
       setDocuments(prev => prev.filter(d => d.id !== movingDoc.id));
     }
@@ -194,8 +197,9 @@ export function TopicPage() {
           </div>
           <button
             onClick={() => setActionError(null)}
-            className="p-1 hover:bg-red-100 rounded text-red-700 transition-colors cursor-pointer"
+            className="p-1 hover:bg-red-100 rounded text-red-700 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
             title="Schließen"
+            aria-label="Schließen"
           >
             <X className="w-4 h-4" />
           </button>
@@ -206,23 +210,26 @@ export function TopicPage() {
         <h2 className="text-lg font-medium text-slate-900">Dokumente</h2>
         <div>
           <input
+            ref={fileInputRef}
             type="file"
-            id="file-upload"
             className="hidden"
             accept=".pdf"
             onChange={handleFileChange}
             disabled={isUploading}
           />
-          <label htmlFor="file-upload">
-            <Button as="span" variant="primary" className="gap-2 cursor-pointer" disabled={isUploading}>
-              {isUploading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Upload className="w-4 h-4" />
-              )}
-              {isUploading ? `Wird hochgeladen (${uploadProgress}%)` : 'Dokument hochladen'}
-            </Button>
-          </label>
+          <Button
+            variant="primary"
+            className="gap-2"
+            disabled={isUploading}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            {isUploading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Upload className="w-4 h-4" />
+            )}
+            {isUploading ? `Wird hochgeladen (${uploadProgress}%)` : 'Dokument hochladen'}
+          </Button>
         </div>
       </div>
 
@@ -232,11 +239,13 @@ export function TopicPage() {
           <p className="text-sm text-slate-500 max-w-sm mb-4">
             Lade dein erstes PDF für dieses Thema hoch.
           </p>
-          <label htmlFor="file-upload">
-            <Button as="span" variant="secondary" className="cursor-pointer" disabled={isUploading}>
-              Dokument hochladen
-            </Button>
-          </label>
+          <Button
+            variant="secondary"
+            disabled={isUploading}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            Dokument hochladen
+          </Button>
         </div>
       ) : (
         <div className="grid gap-3">
@@ -257,38 +266,42 @@ export function TopicPage() {
                     {doc.originalName}
                   </p>
                   <p className="text-xs text-slate-500">
-                    {(doc.size / 1024 / 1024).toFixed(2)} MB &middot; {doc.createdAt instanceof Date ? doc.createdAt.toLocaleDateString() : 'Gerade eben'}
+                    {(doc.size / 1024 / 1024).toFixed(2)} MB &middot; {doc.createdAt.toLocaleDateString('de-DE')}
                   </p>
                 </div>
               </button>
               
               <div className="flex items-center gap-1.5 ml-4 shrink-0">
-                <button 
+                <button
                   onClick={() => handleOpenDocument(doc.id)}
-                  className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors cursor-pointer"
+                  className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
                   title="Öffnen"
+                  aria-label="Öffnen"
                 >
                   <ExternalLink className="w-4 h-4" />
                 </button>
-                <button 
+                <button
                   onClick={() => setRenamingDoc(doc)}
-                  className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors cursor-pointer"
+                  className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
                   title="Umbenennen"
+                  aria-label="Umbenennen"
                 >
                   <Edit2 className="w-4 h-4" />
                 </button>
-                <button 
+                <button
                   onClick={() => setMovingDoc(doc)}
-                  className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors cursor-pointer"
+                  className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
                   title="Verschieben"
+                  aria-label="Verschieben"
                 >
                   <FolderInput className="w-4 h-4" />
                 </button>
-                <button 
-                  onClick={() => handleDeleteDocument(doc.id)}
+                <button
+                  onClick={() => setDocToDelete(doc)}
                   disabled={deletingDocId === doc.id}
-                  className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors disabled:opacity-50 cursor-pointer"
+                  className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors disabled:opacity-50 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
                   title="Löschen"
+                  aria-label="Löschen"
                 >
                   {deletingDocId === doc.id ? (
                     <Loader2 className="w-4 h-4 animate-spin text-red-600" />
@@ -322,6 +335,18 @@ export function TopicPage() {
         subjects={allSubjects}
         topics={allTopics}
         onMove={handleMoveDocument}
+      />
+
+      <DeleteDialog
+        isOpen={!!docToDelete}
+        onClose={() => setDocToDelete(null)}
+        onConfirm={() => handleDeleteDocument(docToDelete?.id ?? '')}
+        title="Dokument löschen?"
+        description={
+          <>
+            Das Dokument <span className="font-semibold text-slate-900">"{docToDelete?.originalName}"</span> wird dauerhaft gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.
+          </>
+        }
       />
     </div>
   );

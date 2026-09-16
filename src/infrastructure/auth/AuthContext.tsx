@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User, signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
-import { auth, googleAuthProvider } from '../firebase/config';
+import { User } from '@supabase/supabase-js';
+import { supabase } from '../supabase/client';
 
 interface AuthContextType {
   user: User | null;
@@ -16,16 +16,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
+    // Restore the session on page load
+    supabase.auth.getSession().then(({ data }) => {
+      setUser(data.session?.user ?? null);
       setIsLoading(false);
     });
-    return unsubscribe;
+
+    // Track session changes (sign-in, sign-out, token refresh)
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      setIsLoading(false);
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
   }, []);
 
   const signIn = async () => {
     try {
-      await signInWithPopup(auth, googleAuthProvider);
+      await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: window.location.origin },
+      });
     } catch (error) {
       console.error('Sign-in failed:', error);
     }
@@ -33,7 +46,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logOut = async () => {
     try {
-      await signOut(auth);
+      await supabase.auth.signOut();
     } catch (error) {
       console.error('Sign-out failed:', error);
     }

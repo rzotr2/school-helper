@@ -1,6 +1,5 @@
-import { collection, doc, getDocs, setDoc, updateDoc, deleteDoc, query, where, serverTimestamp, getDoc, Timestamp } from 'firebase/firestore';
-import { ref, uploadBytesResumable, getDownloadURL, deleteObject, UploadTaskSnapshot } from 'firebase/storage';
-import { db, storage } from '../../infrastructure/firebase/config';
+import { supabase } from '../../infrastructure/supabase/client';
+import type { Database } from '../../infrastructure/supabase/database.types';
 
 export interface Document {
   id: string;
@@ -10,208 +9,204 @@ export interface Document {
   storagePath: string;
   mimeType: string;
   size: number;
-  createdAt: Timestamp | Date;
-  updatedAt: Timestamp | Date;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
 
-export function getMillis(val: Timestamp | Date | null | undefined): number {
-  if (!val) return 0;
-  if ('toMillis' in val && typeof (val as Timestamp).toMillis === 'function') {
-    return (val as Timestamp).toMillis();
-  }
-  if (val instanceof Date) {
-    return val.getTime();
-  }
-  return 0;
+type DocumentRow = Database['public']['Tables']['documents']['Row'];
+
+const DOCUMENT_COLUMNS =
+  'id, owner_id, topic_id, original_name, storage_path, mime_type, size, created_at, updated_at';
+
+function mapDocument(row: DocumentRow): Document {
+  return {
+    id: row.id,
+    ownerId: row.owner_id,
+    topicId: row.topic_id,
+    originalName: row.original_name,
+    storagePath: row.storage_path,
+    mimeType: row.mime_type,
+    size: row.size,
+    createdAt: new Date(row.created_at),
+    updatedAt: new Date(row.updated_at),
+  };
 }
 
-export async function getAllDocuments(
-  userId: string,
-  firestoreInstance: any = db
-): Promise<Document[]> {
+/**
+ * Returns all documents of the given user, newest first.
+ */
+export async function getAllDocuments(userId: string): Promise<Document[]> {
   if (!userId) throw new Error('User must be authenticated');
 
-  const docsRef = collection(firestoreInstance, 'documents');
-  const q = query(
-    docsRef,
-    where('ownerId', '==', userId)
-  );
+  const { data, error } = await supabase
+    .from('documents')
+    .select(DOCUMENT_COLUMNS)
+    .eq('owner_id', userId)
+    .order('created_at', { ascending: false });
 
-  const snapshot = await getDocs(q);
-  const docs = snapshot.docs.map(docSnap => ({
-    id: docSnap.id,
-    ...docSnap.data()
-  } as Document));
+  if (error) throw new Error(error.message);
 
-  return docs.sort((a, b) => getMillis(b.createdAt) - getMillis(a.createdAt));
+  return data.map(mapDocument);
 }
 
-export async function getDocumentsForTopic(
-  userId: string, 
-  topicId: string,
-  firestoreInstance: any = db
-): Promise<Document[]> {
+/**
+ * Returns all documents of the given topic, newest first.
+ */
+export async function getDocumentsForTopic(userId: string, topicId: string): Promise<Document[]> {
   if (!userId) throw new Error('User must be authenticated');
-  
-  const docsRef = collection(firestoreInstance, 'documents');
-  const q = query(
-    docsRef, 
-    where('ownerId', '==', userId),
-    where('topicId', '==', topicId)
-  );
-  
-  const snapshot = await getDocs(q);
-  const docs = snapshot.docs.map(docSnap => ({
-    id: docSnap.id,
-    ...docSnap.data()
-  } as Document));
-  
-  // Sort descending by creation time (newest first)
-  return docs.sort((a, b) => getMillis(b.createdAt) - getMillis(a.createdAt));
+
+  const { data, error } = await supabase
+    .from('documents')
+    .select(DOCUMENT_COLUMNS)
+    .eq('owner_id', userId)
+    .eq('topic_id', topicId)
+    .order('created_at', { ascending: false });
+
+  if (error) throw new Error(error.message);
+
+  return data.map(mapDocument);
 }
 
+/**
+ * Uploads a PDF into Storage and creates its metadata row.
+ * If saving the metadata fails, the uploaded object is rolled back.
+ */
 export async function uploadDocument(
-  userId: string, 
-  topicId: string, 
+  userId: string,
+  topicId: string,
   file: File,
   onProgress?: (progress: number) => void,
-  firestoreInstance = db,
-  storageInstance = storage
 ): Promise<Document> {
   if (!userId) throw new Error('User must be authenticated');
-  
+
   // 1. Validate file
   if (!file) throw new Error('No file provided');
   if (file.type !== 'application/pdf') throw new Error('Only PDF files are supported');
   if (file.size > MAX_FILE_SIZE_BYTES) throw new Error('File exceeds the 10MB limit');
   if (!file.name.trim()) throw new Error('File name cannot be empty');
 
-  // 2. Verify topic ownership
-  const topicRef = doc(firestoreInstance, 'topics', topicId);
-  const topicSnap = await getDoc(topicRef);
-  if (!topicSnap.exists() || topicSnap.data().ownerId !== userId) {
+  // 2. Verify topic ownership. RLS hides rows owned by others, so absence of
+  // the row means either the topic does not exist or it belongs to another user.
+  const { data: topic, error: topicError } = await supabase
+    .from('topics')
+    .select('id')
+    .eq('id', topicId)
+    .maybeSingle();
+
+  if (topicError) throw new Error(topicError.message);
+  if (!topic) {
     throw new Error('Unauthorized: Topic does not exist or belong to user');
   }
 
-  // 3. Prepare metadata and paths
-  const docRef = doc(collection(firestoreInstance, 'documents'));
-  const documentId = docRef.id;
+  // 3. Prepare metadata and paths (client-generated id so the storage path
+  // is known before the upload starts)
+  const documentId = crypto.randomUUID();
   const storagePath = `users/${userId}/documents/${documentId}.pdf`;
-  
   const originalName = file.name.trim();
 
-  // 4. Upload bytes to Firebase Storage
-  const storageRef = ref(storageInstance, storagePath);
-  const uploadTask = uploadBytesResumable(storageRef, file, {
-    contentType: file.type,
-  });
+  // 4. Upload bytes to Supabase Storage (no upsert: a fresh id never collides)
+  onProgress?.(0);
+  const { error: uploadError } = await supabase.storage
+    .from('documents')
+    .upload(storagePath, file, {
+      contentType: file.type,
+      upsert: false,
+    });
 
-  await new Promise<void>((resolve, reject) => {
-    uploadTask.on(
-      'state_changed',
-      (snapshot: UploadTaskSnapshot) => {
-        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-        if (onProgress) onProgress(progress);
-      },
-      (error) => {
-        reject(new Error(`Storage upload failed: ${error.message}`));
-      },
-      () => {
-        resolve();
-      }
-    );
-  });
+  if (uploadError) {
+    throw new Error(`Storage upload failed: ${uploadError.message}`);
+  }
 
-  // 5. Create Firestore metadata
-  const docData = {
-    ownerId: userId,
-    topicId,
-    originalName,
-    storagePath,
-    mimeType: file.type,
-    size: file.size,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp()
-  };
+  // 5. Create the metadata row, returning the real database row
+  const { data: created, error: insertError } = await supabase
+    .from('documents')
+    .insert({
+      id: documentId,
+      owner_id: userId,
+      topic_id: topicId,
+      original_name: originalName,
+      storage_path: storagePath,
+      mime_type: file.type,
+      size: file.size,
+    })
+    .select(DOCUMENT_COLUMNS)
+    .single();
 
-  try {
-    await setDoc(docRef, docData);
-  } catch (error) {
+  if (insertError) {
     // Attempt rollback of storage file if metadata creation fails
     try {
-      await deleteObject(storageRef);
+      await supabase.storage.from('documents').remove([storagePath]);
     } catch (cleanupError) {
       console.error('Failed to cleanup storage after metadata creation failed', cleanupError);
     }
     throw new Error('Failed to save document metadata');
   }
 
-  return {
-    id: documentId,
-    ...docData,
-    createdAt: new Date(),
-    updatedAt: new Date()
-  };
+  onProgress?.(100);
+  return mapDocument(created);
 }
 
-export async function deleteDocument(
-  userId: string, 
-  documentId: string,
-  firestoreInstance = db,
-  storageInstance = storage
-): Promise<void> {
+/**
+ * Deletes the document's storage object first, then its metadata row.
+ * RLS hides rows owned by others, so absence of the row is indistinguishable
+ * from "another user's document".
+ */
+export async function deleteDocument(userId: string, documentId: string): Promise<void> {
   if (!userId) throw new Error('User must be authenticated');
-  
-  const docRef = doc(firestoreInstance, 'documents', documentId);
-  const docSnap = await getDoc(docRef);
-  
-  if (!docSnap.exists()) {
-    throw new Error('Document not found');
-  }
-  
-  const docData = docSnap.data() as Document;
-  if (docData.ownerId !== userId) {
-    throw new Error('Unauthorized');
+
+  const { data: document, error: fetchError } = await supabase
+    .from('documents')
+    .select('id, storage_path')
+    .eq('id', documentId)
+    .maybeSingle();
+
+  if (fetchError) throw new Error(fetchError.message);
+  if (!document) throw new Error('Document not found');
+
+  // Delete the physical storage object first.
+  // If this fails due to a network/permission error, we abort before deleting
+  // metadata, preserving metadata so the user can retry and the file is not orphaned.
+  const { error: removeError } = await supabase.storage
+    .from('documents')
+    .remove([document.storage_path]);
+
+  // If the object is already missing in storage, treat as idempotent cleanup condition
+  if (removeError && !/not found/i.test(removeError.message)) {
+    throw new Error(`Failed to delete file from storage: ${removeError.message}`);
   }
 
-  // Delete physical storage object first.
-  // If this fails due to a network/permission error, we abort before deleting metadata,
-  // preserving metadata so the user can retry and the file is not orphaned.
-  const storageRef = ref(storageInstance, docData.storagePath);
-  
-  try {
-    await deleteObject(storageRef);
-  } catch (error: any) {
-    // If the object is already missing in storage, treat as idempotent cleanup condition
-    if (error?.code !== 'storage/object-not-found') {
-      throw new Error(`Failed to delete file from storage: ${error.message}`);
-    }
-  }
+  const { error: deleteError } = await supabase
+    .from('documents')
+    .delete()
+    .eq('id', documentId);
 
-  await deleteDoc(docRef);
+  if (deleteError) throw new Error(deleteError.message);
 }
 
-export async function getDocumentDownloadUrl(
-  userId: string, 
-  documentId: string,
-  firestoreInstance = db,
-  storageInstance = storage
-): Promise<string> {
+/**
+ * Returns a short-lived signed URL for the document's storage object.
+ */
+export async function getDocumentDownloadUrl(userId: string, documentId: string): Promise<string> {
   if (!userId) throw new Error('User must be authenticated');
-  
-  const docRef = doc(firestoreInstance, 'documents', documentId);
-  const docSnap = await getDoc(docRef);
-  
-  if (!docSnap.exists() || docSnap.data().ownerId !== userId) {
-    throw new Error('Unauthorized');
-  }
-  
-  const docData = docSnap.data() as Document;
-  const storageRef = ref(storageInstance, docData.storagePath);
-  
-  return await getDownloadURL(storageRef);
+
+  const { data: document, error: fetchError } = await supabase
+    .from('documents')
+    .select('id, storage_path')
+    .eq('id', documentId)
+    .maybeSingle();
+
+  if (fetchError) throw new Error(fetchError.message);
+  if (!document) throw new Error('Document not found');
+
+  const { data, error } = await supabase.storage
+    .from('documents')
+    .createSignedUrl(document.storage_path, 3600);
+
+  if (error) throw new Error(error.message);
+
+  return data.signedUrl;
 }
 
 export function normalizeDocumentName(name: string): string {
@@ -229,53 +224,48 @@ export function normalizeDocumentName(name: string): string {
   return normalized;
 }
 
+/**
+ * Renames the document (original_name only, storage path unchanged).
+ */
 export async function renameDocument(
   userId: string,
   documentId: string,
   newName: string,
-  firestoreInstance: any = db
 ): Promise<Document> {
   if (!userId) throw new Error('User must be authenticated');
   if (!documentId) throw new Error('Document ID is required');
 
   const sanitizedName = normalizeDocumentName(newName);
 
-  const docRef = doc(firestoreInstance, 'documents', documentId);
-  let docSnap;
-  try {
-    docSnap = await getDoc(docRef);
-  } catch {
-    throw new Error('Unauthorized');
-  }
+  const { data: existing, error: fetchError } = await supabase
+    .from('documents')
+    .select(DOCUMENT_COLUMNS)
+    .eq('id', documentId)
+    .maybeSingle();
 
-  if (!docSnap.exists()) {
-    throw new Error('Dokument nicht gefunden');
-  }
+  if (fetchError) throw new Error(fetchError.message);
+  if (!existing) throw new Error('Dokument nicht gefunden');
 
-  const existingData = docSnap.data() as Document;
-  if (existingData.ownerId !== userId) {
-    throw new Error('Unauthorized');
-  }
+  const { data: updated, error: updateError } = await supabase
+    .from('documents')
+    .update({ original_name: sanitizedName })
+    .eq('id', documentId)
+    .select(DOCUMENT_COLUMNS)
+    .single();
 
-  // Update only allowed metadata field and updatedAt
-  await updateDoc(docRef, {
-    originalName: sanitizedName,
-    updatedAt: serverTimestamp()
-  });
+  if (updateError) throw new Error(updateError.message);
 
-  return {
-    ...existingData,
-    id: documentId,
-    originalName: sanitizedName,
-    updatedAt: new Date()
-  };
+  return mapDocument(updated);
 }
 
+/**
+ * Moves the document into another of the user's topics (topic_id only,
+ * storage path unchanged).
+ */
 export async function moveDocument(
   userId: string,
   documentId: string,
   targetTopicId: string,
-  firestoreInstance: any = db
 ): Promise<Document> {
   if (!userId) throw new Error('User must be authenticated');
   if (!documentId) throw new Error('Document ID is required');
@@ -283,54 +273,41 @@ export async function moveDocument(
     throw new Error('Ziel-Thema ist ungültig');
   }
 
-  // 1. Verify target topic exists and belongs to user
-  const topicRef = doc(firestoreInstance, 'topics', targetTopicId);
-  let topicSnap;
-  try {
-    topicSnap = await getDoc(topicRef);
-  } catch {
+  // 1. Verify the target topic exists and belongs to the user
+  const { data: targetTopic, error: topicError } = await supabase
+    .from('topics')
+    .select('id')
+    .eq('id', targetTopicId)
+    .maybeSingle();
+
+  if (topicError) throw new Error(topicError.message);
+  if (!targetTopic) {
     throw new Error('Unauthorized: Ziel-Thema existiert nicht oder gehört einem anderen Benutzer');
   }
 
-  if (!topicSnap.exists() || topicSnap.data().ownerId !== userId) {
-    throw new Error('Unauthorized: Ziel-Thema existiert nicht oder gehört einem anderen Benutzer');
+  // 2. Load the existing document
+  const { data: existing, error: fetchError } = await supabase
+    .from('documents')
+    .select(DOCUMENT_COLUMNS)
+    .eq('id', documentId)
+    .maybeSingle();
+
+  if (fetchError) throw new Error(fetchError.message);
+  if (!existing) throw new Error('Dokument nicht gefunden');
+
+  if (existing.topic_id === targetTopicId) {
+    return mapDocument(existing);
   }
 
-  // 2. Load existing document and verify ownership
-  const docRef = doc(firestoreInstance, 'documents', documentId);
-  let docSnap;
-  try {
-    docSnap = await getDoc(docRef);
-  } catch {
-    throw new Error('Unauthorized');
-  }
+  // 3. Update only topicId and updatedAt, returning the real database row
+  const { data: updated, error: updateError } = await supabase
+    .from('documents')
+    .update({ topic_id: targetTopicId })
+    .eq('id', documentId)
+    .select(DOCUMENT_COLUMNS)
+    .single();
 
-  if (!docSnap.exists()) {
-    throw new Error('Dokument nicht gefunden');
-  }
+  if (updateError) throw new Error(updateError.message);
 
-  const existingData = docSnap.data() as Document;
-  if (existingData.ownerId !== userId) {
-    throw new Error('Unauthorized');
-  }
-
-  if (existingData.topicId === targetTopicId) {
-    return {
-      ...existingData,
-      id: documentId
-    };
-  }
-
-  // 3. Update only topicId and updatedAt
-  await updateDoc(docRef, {
-    topicId: targetTopicId,
-    updatedAt: serverTimestamp()
-  });
-
-  return {
-    ...existingData,
-    id: documentId,
-    topicId: targetTopicId,
-    updatedAt: new Date()
-  };
+  return mapDocument(updated);
 }

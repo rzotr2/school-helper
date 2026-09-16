@@ -1,5 +1,4 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Timestamp } from 'firebase/firestore';
 import { FileText, Loader2, ExternalLink, Trash2, Search, AlertCircle, X, Edit2, FolderInput } from 'lucide-react';
 import { useAuth } from '../../infrastructure/auth/AuthContext';
 import { Document, getAllDocuments, deleteDocument, getDocumentDownloadUrl, renameDocument, moveDocument } from '../../application/use-cases/documents';
@@ -7,6 +6,7 @@ import { Subject, getSubjects } from '../../application/use-cases/subjects';
 import { Topic, getAllTopics } from '../../application/use-cases/topics';
 import { NameDialog } from '../components/NameDialog';
 import { MoveDocumentDialog } from '../components/MoveDocumentDialog';
+import { DeleteDialog } from '../components/DeleteDialog';
 
 function formatFileSize(bytes: number): string {
   if (!bytes || bytes <= 0) return '0 B';
@@ -19,23 +19,13 @@ function formatFileSize(bytes: number): string {
   return `${mb} MB`;
 }
 
-function formatDate(val: Timestamp | Date | null | undefined): string {
+function formatDate(val: Date | null | undefined): string {
   if (!val) return 'Unbekanntes Datum';
-  if ('toDate' in val && typeof (val as Timestamp).toDate === 'function') {
-    return (val as Timestamp).toDate().toLocaleDateString('de-DE', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    });
-  }
-  if (val instanceof Date) {
-    return val.toLocaleDateString('de-DE', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    });
-  }
-  return 'Unbekanntes Datum';
+  return val.toLocaleDateString('de-DE', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  });
 }
 
 export function Home() {
@@ -49,6 +39,7 @@ export function Home() {
   const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
   const [renamingDoc, setRenamingDoc] = useState<Document | null>(null);
   const [movingDoc, setMovingDoc] = useState<Document | null>(null);
+  const [docToDelete, setDocToDelete] = useState<Document | null>(null);
 
   // Filters
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>('all');
@@ -61,9 +52,9 @@ export function Home() {
     setError(null);
     try {
       const [loadedSubjects, loadedTopics, loadedDocs] = await Promise.all([
-        getSubjects(user.uid),
-        getAllTopics(user.uid),
-        getAllDocuments(user.uid)
+        getSubjects(user.id),
+        getAllTopics(user.id),
+        getAllDocuments(user.id)
       ]);
       setSubjects(loadedSubjects);
       setTopics(loadedTopics);
@@ -130,7 +121,7 @@ export function Home() {
     if (!user) return;
     setActionError(null);
     try {
-      const url = await getDocumentDownloadUrl(user.uid, docId);
+      const url = await getDocumentDownloadUrl(user.id, docId);
       window.open(url, '_blank', 'noopener,noreferrer');
     } catch (err) {
       console.error('Failed to open document', err);
@@ -143,7 +134,7 @@ export function Home() {
     setActionError(null);
     setDeletingDocId(docId);
     try {
-      await deleteDocument(user.uid, docId);
+      await deleteDocument(user.id, docId);
       setDocuments(prev => prev.filter(d => d.id !== docId));
     } catch (err) {
       console.error('Failed to delete document', err);
@@ -156,7 +147,7 @@ export function Home() {
   const handleRenameDocument = async (newName: string) => {
     if (!user || !renamingDoc) return;
     setActionError(null);
-    const updated = await renameDocument(user.uid, renamingDoc.id, newName);
+    const updated = await renameDocument(user.id, renamingDoc.id, newName);
     setDocuments(prev => prev.map(d => d.id === updated.id ? updated : d));
     setRenamingDoc(null);
   };
@@ -164,7 +155,7 @@ export function Home() {
   const handleMoveDocument = async (targetTopicId: string) => {
     if (!user || !movingDoc) return;
     setActionError(null);
-    const updated = await moveDocument(user.uid, movingDoc.id, targetTopicId);
+    const updated = await moveDocument(user.id, movingDoc.id, targetTopicId);
     setDocuments(prev => prev.map(d => d.id === updated.id ? { ...d, topicId: updated.topicId } : d));
     setMovingDoc(null);
   };
@@ -213,8 +204,9 @@ export function Home() {
           <span>{actionError}</span>
           <button
             onClick={() => setActionError(null)}
-            className="text-red-500 hover:text-red-700 transition-colors cursor-pointer"
+            className="text-red-500 hover:text-red-700 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 rounded"
             title="Schließen"
+            aria-label="Schließen"
           >
             <X className="w-4 h-4" />
           </button>
@@ -347,30 +339,34 @@ export function Home() {
                 <div className="flex items-center gap-1.5 ml-4 shrink-0">
                   <button
                     onClick={() => handleOpenDocument(doc.id)}
-                    className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors cursor-pointer"
+                    className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
                     title="Öffnen"
+                    aria-label="Öffnen"
                   >
                     <ExternalLink className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => setRenamingDoc(doc)}
-                    className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors cursor-pointer"
+                    className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
                     title="Umbenennen"
+                    aria-label="Umbenennen"
                   >
                     <Edit2 className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => setMovingDoc(doc)}
-                    className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors cursor-pointer"
+                    className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
                     title="Verschieben"
+                    aria-label="Verschieben"
                   >
                     <FolderInput className="w-4 h-4" />
                   </button>
                   <button
-                    onClick={() => handleDeleteDocument(doc.id)}
+                    onClick={() => setDocToDelete(doc)}
                     disabled={deletingDocId === doc.id}
-                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors cursor-pointer disabled:opacity-50"
+                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors cursor-pointer disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
                     title="Löschen"
+                    aria-label="Löschen"
                   >
                     {deletingDocId === doc.id ? (
                       <Loader2 className="w-4 h-4 animate-spin text-red-600" />
@@ -405,6 +401,18 @@ export function Home() {
         subjects={subjects}
         topics={topics}
         onMove={handleMoveDocument}
+      />
+
+      <DeleteDialog
+        isOpen={!!docToDelete}
+        onClose={() => setDocToDelete(null)}
+        onConfirm={() => handleDeleteDocument(docToDelete?.id ?? '')}
+        title="Dokument löschen?"
+        description={
+          <>
+            Das Dokument <span className="font-semibold text-slate-900">"{docToDelete?.originalName}"</span> wird dauerhaft gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.
+          </>
+        }
       />
     </div>
   );

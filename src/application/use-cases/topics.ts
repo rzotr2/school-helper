@@ -1,20 +1,5 @@
-import { 
-  collection, 
-  doc, 
-  getDoc, 
-  getDocs, 
-  setDoc, 
-  updateDoc, 
-  deleteDoc, 
-  query, 
-  where, 
-  orderBy, 
-  serverTimestamp,
-  writeBatch,
-  Timestamp
-} from 'firebase/firestore';
-import { ref, deleteObject } from 'firebase/storage';
-import { db, storage } from '../../infrastructure/firebase/config';
+import { supabase } from '../../infrastructure/supabase/client';
+import type { Database } from '../../infrastructure/supabase/database.types';
 
 export interface Topic {
   id: string;
@@ -22,182 +7,226 @@ export interface Topic {
   subjectId: string;
   name: string;
   position: number;
-  createdAt: Timestamp | Date;
-  updatedAt: Timestamp | Date;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
-export async function getAllTopics(userId: string, firestoreInstance: any = db): Promise<Topic[]> {
-  if (!userId) throw new Error('User must be authenticated');
-  
-  const topicsRef = collection(firestoreInstance, 'topics');
-  const q = query(
-    topicsRef, 
-    where('ownerId', '==', userId)
-  );
-  
-  const snapshot = await getDocs(q);
-  const topics = snapshot.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data()
-  } as Topic));
-  return topics.sort((a, b) => (a.position || 0) - (b.position || 0));
-}
+type TopicRow = Database['public']['Tables']['topics']['Row'];
 
-export async function getTopicsForSubject(userId: string, subjectId: string): Promise<Topic[]> {
-  if (!userId) throw new Error('User must be authenticated');
-  
-  const topicsRef = collection(db, 'topics');
-  const q = query(
-    topicsRef, 
-    where('ownerId', '==', userId),
-    where('subjectId', '==', subjectId)
-  );
-  
-  const snapshot = await getDocs(q);
-  const topics = snapshot.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data()
-  } as Topic));
-  return topics.sort((a, b) => (a.position || 0) - (b.position || 0));
-}
+const TOPIC_COLUMNS = 'id, owner_id, subject_id, name, position, created_at, updated_at';
 
-export async function getTopic(userId: string, topicId: string): Promise<Topic> {
-  if (!userId) throw new Error('User must be authenticated');
-  
-  const docRef = doc(db, 'topics', topicId);
-  const snapshot = await getDoc(docRef);
-  
-  if (!snapshot.exists()) {
-    throw new Error('Topic not found');
-  }
-  
-  const data = snapshot.data();
-  if (data.ownerId !== userId) {
-    throw new Error('Unauthorized');
-  }
-  
+function mapTopic(row: TopicRow): Topic {
   return {
-    id: snapshot.id,
-    ...data
-  } as Topic;
+    id: row.id,
+    ownerId: row.owner_id,
+    subjectId: row.subject_id,
+    name: row.name,
+    position: row.position,
+    createdAt: new Date(row.created_at),
+    updatedAt: new Date(row.updated_at),
+  };
 }
 
-export async function createTopic(userId: string, subjectId: string, name: string): Promise<Topic> {
-  if (!userId) throw new Error('User must be authenticated');
-  
-  const trimmedName = name.trim();
-  if (!trimmedName) throw new Error('Topic name cannot be empty');
-  if (trimmedName.length > 100) throw new Error('Topic name must be 100 characters or less');
+/**
+ * Returns all topics of the given user, ordered by position.
+ */
+export async function getAllTopics(userId: string): Promise<Topic[]> {
+  if (!userId) {
+    throw new Error('User must be authenticated');
+  }
 
-  // Verify subject ownership before creating topic (app-level boundary check)
-  const subjectRef = doc(db, 'subjects', subjectId);
-  const subjectSnap = await getDoc(subjectRef);
-  if (!subjectSnap.exists() || subjectSnap.data().ownerId !== userId) {
+  const { data, error } = await supabase
+    .from('topics')
+    .select(TOPIC_COLUMNS)
+    .eq('owner_id', userId)
+    .order('position');
+
+  if (error) throw new Error(error.message);
+
+  return data.map(mapTopic);
+}
+
+/**
+ * Returns all topics of the given subject, ordered by position.
+ */
+export async function getTopicsForSubject(userId: string, subjectId: string): Promise<Topic[]> {
+  if (!userId) {
+    throw new Error('User must be authenticated');
+  }
+
+  const { data, error } = await supabase
+    .from('topics')
+    .select(TOPIC_COLUMNS)
+    .eq('owner_id', userId)
+    .eq('subject_id', subjectId)
+    .order('position');
+
+  if (error) throw new Error(error.message);
+
+  return data.map(mapTopic);
+}
+
+/**
+ * Returns the topic with the given id. RLS hides rows owned by others, so
+ * absence of the row is indistinguishable from "another user's topic".
+ */
+export async function getTopic(userId: string, topicId: string): Promise<Topic> {
+  if (!userId) {
+    throw new Error('User must be authenticated');
+  }
+
+  const { data, error } = await supabase
+    .from('topics')
+    .select(TOPIC_COLUMNS)
+    .eq('id', topicId)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error('Topic not found');
+
+  return mapTopic(data);
+}
+
+/**
+ * Creates a new topic in the given subject. The subject must belong to the
+ * current user, and topic names must be unique within the subject.
+ */
+export async function createTopic(userId: string, subjectId: string, name: string): Promise<Topic> {
+  if (!userId) {
+    throw new Error('User must be authenticated');
+  }
+
+  const trimmedName = name.trim();
+  if (!trimmedName) {
+    throw new Error('Topic name cannot be empty');
+  }
+  if (trimmedName.length > 100) {
+    throw new Error('Topic name must be 100 characters or less');
+  }
+
+  // Verify the subject exists and belongs to the user (RLS enforces this as
+  // a backstop, but the UI needs the specific error message).
+  const { data: subject, error: subjectError } = await supabase
+    .from('subjects')
+    .select('id')
+    .eq('id', subjectId)
+    .maybeSingle();
+
+  if (subjectError) throw new Error(subjectError.message);
+  if (!subject) {
     throw new Error('Unauthorized: Subject does not exist or belong to user');
   }
 
-  // Check for duplicate names in the same subject
+  // Duplicate check (case-insensitive, as before)
   const existingTopics = await getTopicsForSubject(userId, subjectId);
-  if (existingTopics.some(t => t.name.toLowerCase() === trimmedName.toLowerCase())) {
+  if (existingTopics.some((t) => t.name.toLowerCase() === trimmedName.toLowerCase())) {
     throw new Error('A topic with this name already exists in this subject');
   }
 
-  const position = existingTopics.length;
-  const newTopicRef = doc(collection(db, 'topics'));
-  
-  const topicData = {
-    ownerId: userId,
-    subjectId,
-    name: trimmedName,
-    position,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp()
-  };
+  const id = crypto.randomUUID();
+  const { data: created, error } = await supabase
+    .from('topics')
+    .insert({
+      id,
+      owner_id: userId,
+      subject_id: subjectId,
+      name: trimmedName,
+      position: existingTopics.length,
+    })
+    .select(TOPIC_COLUMNS)
+    .single();
 
-  await setDoc(newTopicRef, topicData);
-  
-  return {
-    id: newTopicRef.id,
-    ...topicData,
-    createdAt: new Date(), // Local approximation for immediate UI updates
-    updatedAt: new Date()
-  };
+  if (error) throw new Error(error.message);
+
+  return mapTopic(created);
 }
 
+/**
+ * Renames the given topic. Duplicate names within the subject are rejected.
+ */
 export async function updateTopic(userId: string, topicId: string, name: string): Promise<void> {
-  if (!userId) throw new Error('User must be authenticated');
-  
-  const trimmedName = name.trim();
-  if (!trimmedName) throw new Error('Topic name cannot be empty');
-  if (trimmedName.length > 100) throw new Error('Topic name must be 100 characters or less');
+  if (!userId) {
+    throw new Error('User must be authenticated');
+  }
 
-  // We could check for duplicate name on rename too, but let's just do it
+  const trimmedName = name.trim();
+  if (!trimmedName) {
+    throw new Error('Topic name cannot be empty');
+  }
+  if (trimmedName.length > 100) {
+    throw new Error('Topic name must be 100 characters or less');
+  }
+
   const topic = await getTopic(userId, topicId);
-  
+
   const existingTopics = await getTopicsForSubject(userId, topic.subjectId);
-  if (existingTopics.some(t => t.id !== topicId && t.name.toLowerCase() === trimmedName.toLowerCase())) {
+  if (
+    existingTopics.some(
+      (t) => t.id !== topicId && t.name.toLowerCase() === trimmedName.toLowerCase(),
+    )
+  ) {
     throw new Error('A topic with this name already exists in this subject');
   }
 
-  const topicRef = doc(db, 'topics', topicId);
-  await updateDoc(topicRef, {
-    name: trimmedName,
-    updatedAt: serverTimestamp()
-  });
+  const { error } = await supabase
+    .from('topics')
+    .update({ name: trimmedName })
+    .eq('id', topicId);
+
+  if (error) throw new Error(error.message);
 }
 
-export async function deleteTopic(
-  userId: string, 
-  topicId: string,
-  firestoreInstance: any = db,
-  storageInstance: any = storage
-): Promise<void> {
-  if (!userId) throw new Error('User must be authenticated');
-  
-  // 1. Verify authenticated ownership before deleting
-  const topicRef = doc(firestoreInstance, 'topics', topicId);
-  const topicSnap = await getDoc(topicRef);
-  if (!topicSnap.exists()) {
-    throw new Error('Topic not found');
-  }
-  if (topicSnap.data().ownerId !== userId) {
-    throw new Error('Unauthorized');
+/**
+ * Deletes the topic, its documents' storage objects and their metadata rows.
+ */
+export async function deleteTopic(userId: string, topicId: string): Promise<void> {
+  if (!userId) {
+    throw new Error('User must be authenticated');
   }
 
-  // 2. Find all Documents belonging to the Topic
-  const docsRef = collection(firestoreInstance, 'documents');
-  const q = query(
-    docsRef,
-    where('ownerId', '==', userId),
-    where('topicId', '==', topicId)
-  );
-  const docsSnapshot = await getDocs(q);
+  // Ownership check: RLS hides rows owned by others.
+  const { data: topic, error: topicError } = await supabase
+    .from('topics')
+    .select('id')
+    .eq('id', topicId)
+    .maybeSingle();
 
-  // 3. Delete their Storage objects
-  // If storage deletion fails, we abort before deleting metadata,
-  // preventing orphaned storage files and preserving state for retry.
-  for (const docSnap of docsSnapshot.docs) {
-    const data = docSnap.data();
-    if (data.storagePath) {
-      const storageRef = ref(storageInstance, data.storagePath);
-      try {
-        await deleteObject(storageRef);
-      } catch (error: any) {
-        // If the object is already missing in storage, treat as idempotent cleanup
-        if (error?.code !== 'storage/object-not-found') {
-          throw new Error(`Failed to delete storage file: ${error?.message || 'Storage error'}`);
-        }
-      }
+  if (topicError) throw new Error(topicError.message);
+  if (!topic) throw new Error('Topic not found');
+
+  // Collect the topic's documents.
+  const { data: documents, error: documentsError } = await supabase
+    .from('documents')
+    .select('id, storage_path')
+    .eq('topic_id', topicId);
+
+  if (documentsError) throw new Error(documentsError.message);
+
+  // Delete the storage objects first. If an object is already gone the
+  // removal is treated as success; any other storage error aborts the
+  // deletion before metadata rows disappear, avoiding orphaned files.
+  for (const document of documents) {
+    const { error: removeError } = await supabase.storage
+      .from('documents')
+      .remove([document.storage_path]);
+
+    if (removeError && !/not found/i.test(removeError.message)) {
+      throw new Error(`Failed to delete storage file: ${removeError.message}`);
     }
   }
 
-  // 4. Delete Document metadata in Firestore
-  // 5. Delete the Topic in Firestore
-  const batch = writeBatch(firestoreInstance);
-  docsSnapshot.docs.forEach((docSnap) => {
-    batch.delete(docSnap.ref);
-  });
-  batch.delete(topicRef);
+  // Delete the metadata rows, then the topic itself.
+  const { error: deleteDocumentsError } = await supabase
+    .from('documents')
+    .delete()
+    .eq('topic_id', topicId);
 
-  await batch.commit();
+  if (deleteDocumentsError) throw new Error(deleteDocumentsError.message);
+
+  const { error: deleteTopicError } = await supabase
+    .from('topics')
+    .delete()
+    .eq('id', topicId);
+
+  if (deleteTopicError) throw new Error(deleteTopicError.message);
 }

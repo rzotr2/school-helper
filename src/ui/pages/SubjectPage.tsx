@@ -30,11 +30,11 @@ export function SubjectPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const subjects = await getSubjects(user.uid);
+      const subjects = await getSubjects(user.id);
       const found = subjects.find(s => s.id === subjectId);
       if (found) {
         setSubject(found);
-        const loadedTopics = await getTopicsForSubject(user.uid, found.id);
+        const loadedTopics = await getTopicsForSubject(user.id, found.id);
         setTopics(loadedTopics);
       } else {
         navigate('/', { replace: true });
@@ -55,14 +55,14 @@ export function SubjectPage() {
 
   const handleEditSubject = async (name: string) => {
     if (!user || !subject) return;
-    await updateSubject(user.uid, subject.id, name);
+    await updateSubject(user.id, subject.id, name);
     window.location.reload(); 
   };
 
   const handleDeleteSubject = async () => {
     if (!user || !subject) return;
     try {
-      await deleteSubject(user.uid, subject.id);
+      await deleteSubject(user.id, subject.id);
       window.location.href = '/'; 
     } catch (err: any) {
       console.error("Failed to delete subject", err);
@@ -73,13 +73,13 @@ export function SubjectPage() {
 
   const handleAddTopic = async (name: string) => {
     if (!user || !subject) return;
-    await createTopic(user.uid, subject.id, name);
+    await createTopic(user.id, subject.id, name);
     await loadData();
   };
 
   const handleEditTopic = async (name: string) => {
     if (!user || !editingTopic) return;
-    await updateTopic(user.uid, editingTopic.id, name);
+    await updateTopic(user.id, editingTopic.id, name);
     setEditingTopic(null);
     await loadData();
   };
@@ -87,7 +87,7 @@ export function SubjectPage() {
   const handleDeleteTopic = async () => {
     if (!user || !deletingTopic) return;
     try {
-      await deleteTopic(user.uid, deletingTopic.id);
+      await deleteTopic(user.id, deletingTopic.id);
       setDeletingTopic(null);
       await loadData();
     } catch (err: any) {
@@ -131,7 +131,7 @@ export function SubjectPage() {
             <Edit2 className="w-4 h-4" />
             <span className="hidden sm:inline">Umbenennen</span>
           </Button>
-          <Button variant="ghost" onClick={() => setIsDeleteDialogOpen(true)} className="text-red-600 hover:text-red-700 hover:bg-red-50 px-3">
+          <Button variant="ghost" onClick={() => setIsDeleteDialogOpen(true)} aria-label="Fach löschen" className="text-red-600 hover:text-red-700 hover:bg-red-50 px-3">
             <Trash2 className="w-4 h-4" />
           </Button>
         </div>
@@ -171,16 +171,18 @@ export function SubjectPage() {
                   <span className="font-medium text-slate-900 truncate">{topic.name}</span>
                 </Link>
                 
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button 
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100 transition-opacity">
+                  <button
                     onClick={() => setEditingTopic(topic)}
-                    className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
+                    aria-label={`Thema "${topic.name}" umbenennen`}
+                    className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
                   >
                     <Edit2 className="w-4 h-4" />
                   </button>
-                  <button 
+                  <button
                     onClick={() => setDeletingTopic(topic)}
-                    className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                    aria-label={`Thema "${topic.name}" löschen`}
+                    className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>

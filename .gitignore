@@ -6,3 +6,10 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# AI tooling (never committed)
+.claude/
+CLAUDE.md
+AGENTS.md
+.cursor/
+.gemini/

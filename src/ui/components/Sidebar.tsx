@@ -18,12 +18,12 @@ export function Sidebar() {
     try {
       setIsLoading(true);
       // Check for school profile first, create if missing
-      const profile = await getSchoolProfile(user.uid);
+      const profile = await getSchoolProfile(user.id);
       if (!profile) {
-        await createSchoolProfile(user.uid);
+        await createSchoolProfile(user.id);
       }
       
-      const loadedSubjects = await getSubjects(user.uid);
+      const loadedSubjects = await getSubjects(user.id);
       setSubjects(loadedSubjects);
     } catch (error) {
       console.error("Failed to load subjects:", error);
@@ -41,7 +41,7 @@ export function Sidebar() {
   const handleAddSubject = async (name: string) => {
     if (!user) return;
     const position = subjects.length > 0 ? subjects[subjects.length - 1].position + 1 : 0;
-    await createSubject(user.uid, name, position);
+    await createSubject(user.id, name, position);
     await loadData();
   };
 
@@ -74,10 +74,11 @@ export function Sidebar() {
             <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
               Fächer
             </h3>
-            <button 
+            <button
               onClick={() => setIsAddDialogOpen(true)}
-              className="text-slate-400 hover:text-slate-600 transition-colors cursor-pointer p-1 rounded hover:bg-slate-100"
+              className="text-slate-400 hover:text-slate-600 transition-colors cursor-pointer p-1 rounded hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
               title="Fach hinzufügen"
+              aria-label="Fach hinzufügen"
             >
               <Plus className="w-4 h-4" />
             </button>

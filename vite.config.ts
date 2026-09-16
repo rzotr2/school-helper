@@ -6,10 +6,9 @@ export default defineConfig(() => {
   return {
     plugins: [react(), tailwindcss()],
     server: {
-      // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
+      // HMR and file watching can be turned off via the DISABLE_HMR env var.
       hmr: process.env.DISABLE_HMR !== 'true',
-      // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
+      // Disable file watching to save CPU when HMR is off.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
     },
   };
