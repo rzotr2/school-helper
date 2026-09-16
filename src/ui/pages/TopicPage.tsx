@@ -5,7 +5,9 @@ import { Button } from '../components/Button';
 import { NameDialog } from '../components/NameDialog';
 import { MoveDocumentDialog } from '../components/MoveDocumentDialog';
 import { DeleteDialog } from '../components/DeleteDialog';
-import { Document, getDocumentsForTopic, uploadDocument, deleteDocument, getDocumentDownloadUrl, renameDocument, moveDocument } from '../../application/use-cases/documents';
+import { Document, getDocumentsForTopic, uploadDocument } from '../../application/use-cases/documents';
+import { useDocumentActions } from '../hooks/useDocumentActions';
+import { formatFileSize } from '../../shared/utils/format';
 import { useAuth } from '../../infrastructure/auth/AuthContext';
 import { Subject, getSubjects } from '../../application/use-cases/subjects';
 import { Topic, getTopic, getAllTopics } from '../../application/use-cases/topics';
@@ -21,16 +23,29 @@ export function TopicPage() {
   const [allTopics, setAllTopics] = useState<Topic[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
-  const [renamingDoc, setRenamingDoc] = useState<Document | null>(null);
-  const [movingDoc, setMovingDoc] = useState<Document | null>(null);
-  const [docToDelete, setDocToDelete] = useState<Document | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Shared document action handlers and their dialog state. The page shows a
+  // single topic, so documents moved elsewhere leave the list.
+  const {
+    actionError,
+    setActionError,
+    deletingDocId,
+    renamingDoc,
+    setRenamingDoc,
+    movingDoc,
+    setMovingDoc,
+    docToDelete,
+    setDocToDelete,
+    handleOpenDocument,
+    handleDeleteDocument,
+    handleRenameDocument,
+    handleMoveDocument,
+  } = useDocumentActions(user?.id, setDocuments, { currentTopicId: topicId });
 
   useEffect(() => {
     const loadData = async () => {
@@ -96,51 +111,6 @@ export function TopicPage() {
       setIsUploading(false);
       setUploadProgress(0);
     }
-  };
-
-  const handleDeleteDocument = async (docId: string) => {
-    if (!user) return;
-    setActionError(null);
-    setDeletingDocId(docId);
-    try {
-      await deleteDocument(user.id, docId);
-      setDocuments(prev => prev.filter(d => d.id !== docId));
-    } catch (err) {
-      console.error('Failed to delete document', err);
-      setActionError('Fehler beim Löschen des Dokuments.');
-    } finally {
-      setDeletingDocId(null);
-    }
-  };
-
-  const handleOpenDocument = async (docId: string) => {
-    if (!user) return;
-    setActionError(null);
-    try {
-      const url = await getDocumentDownloadUrl(user.id, docId);
-      window.open(url, '_blank', 'noopener,noreferrer');
-    } catch (err) {
-      console.error('Failed to open document', err);
-      setActionError('Dokument konnte nicht geöffnet werden.');
-    }
-  };
-
-  const handleRenameDocument = async (newName: string) => {
-    if (!user || !renamingDoc) return;
-    setActionError(null);
-    const updated = await renameDocument(user.id, renamingDoc.id, newName);
-    setDocuments(prev => prev.map(d => d.id === updated.id ? updated : d));
-    setRenamingDoc(null);
-  };
-
-  const handleMoveDocument = async (targetTopicId: string) => {
-    if (!user || !movingDoc) return;
-    setActionError(null);
-    await moveDocument(user.id, movingDoc.id, targetTopicId);
-    if (targetTopicId !== topicId) {
-      setDocuments(prev => prev.filter(d => d.id !== movingDoc.id));
-    }
-    setMovingDoc(null);
   };
 
   if (isAuthLoading || isLoading) {
@@ -266,7 +236,7 @@ export function TopicPage() {
                     {doc.originalName}
                   </p>
                   <p className="text-xs text-slate-500">
-                    {(doc.size / 1024 / 1024).toFixed(2)} MB &middot; {doc.createdAt.toLocaleDateString('de-DE')}
+                    {formatFileSize(doc.size)} &middot; {doc.createdAt.toLocaleDateString('de-DE')}
                   </p>
                 </div>
               </button>

@@ -1,23 +1,14 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { FileText, Loader2, ExternalLink, Trash2, Search, AlertCircle, X, Edit2, FolderInput } from 'lucide-react';
 import { useAuth } from '../../infrastructure/auth/AuthContext';
-import { Document, getAllDocuments, deleteDocument, getDocumentDownloadUrl, renameDocument, moveDocument } from '../../application/use-cases/documents';
+import { Document, getAllDocuments } from '../../application/use-cases/documents';
 import { Subject, getSubjects } from '../../application/use-cases/subjects';
 import { Topic, getAllTopics } from '../../application/use-cases/topics';
 import { NameDialog } from '../components/NameDialog';
 import { MoveDocumentDialog } from '../components/MoveDocumentDialog';
 import { DeleteDialog } from '../components/DeleteDialog';
-
-function formatFileSize(bytes: number): string {
-  if (!bytes || bytes <= 0) return '0 B';
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) {
-    const kb = (bytes / 1024).toLocaleString('de-DE', { maximumFractionDigits: 1 });
-    return `${kb} KB`;
-  }
-  const mb = (bytes / (1024 * 1024)).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-  return `${mb} MB`;
-}
+import { useDocumentActions } from '../hooks/useDocumentActions';
+import { formatFileSize } from '../../shared/utils/format';
 
 function formatDate(val: Date | null | undefined): string {
   if (!val) return 'Unbekanntes Datum';
@@ -35,11 +26,22 @@ export function Home() {
   const [topics, setTopics] = useState<Topic[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
-  const [renamingDoc, setRenamingDoc] = useState<Document | null>(null);
-  const [movingDoc, setMovingDoc] = useState<Document | null>(null);
-  const [docToDelete, setDocToDelete] = useState<Document | null>(null);
+  // Shared document action handlers and their dialog state.
+  const {
+    actionError,
+    setActionError,
+    deletingDocId,
+    renamingDoc,
+    setRenamingDoc,
+    movingDoc,
+    setMovingDoc,
+    docToDelete,
+    setDocToDelete,
+    handleOpenDocument,
+    handleDeleteDocument,
+    handleRenameDocument,
+    handleMoveDocument,
+  } = useDocumentActions(user?.id, setDocuments);
 
   // Filters
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>('all');
@@ -116,49 +118,6 @@ export function Home() {
       return true;
     });
   }, [documents, topicsMap, selectedSubjectId, selectedTopicId, searchQuery]);
-
-  const handleOpenDocument = async (docId: string) => {
-    if (!user) return;
-    setActionError(null);
-    try {
-      const url = await getDocumentDownloadUrl(user.id, docId);
-      window.open(url, '_blank', 'noopener,noreferrer');
-    } catch (err) {
-      console.error('Failed to open document', err);
-      setActionError('Dokument konnte nicht geöffnet werden.');
-    }
-  };
-
-  const handleDeleteDocument = async (docId: string) => {
-    if (!user) return;
-    setActionError(null);
-    setDeletingDocId(docId);
-    try {
-      await deleteDocument(user.id, docId);
-      setDocuments(prev => prev.filter(d => d.id !== docId));
-    } catch (err) {
-      console.error('Failed to delete document', err);
-      setActionError('Fehler beim Löschen des Dokuments. Bitte versuche es erneut.');
-    } finally {
-      setDeletingDocId(null);
-    }
-  };
-
-  const handleRenameDocument = async (newName: string) => {
-    if (!user || !renamingDoc) return;
-    setActionError(null);
-    const updated = await renameDocument(user.id, renamingDoc.id, newName);
-    setDocuments(prev => prev.map(d => d.id === updated.id ? updated : d));
-    setRenamingDoc(null);
-  };
-
-  const handleMoveDocument = async (targetTopicId: string) => {
-    if (!user || !movingDoc) return;
-    setActionError(null);
-    const updated = await moveDocument(user.id, movingDoc.id, targetTopicId);
-    setDocuments(prev => prev.map(d => d.id === updated.id ? { ...d, topicId: updated.topicId } : d));
-    setMovingDoc(null);
-  };
 
   const handleResetFilters = () => {
     setSelectedSubjectId('all');
