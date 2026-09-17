@@ -182,7 +182,13 @@ export function describeViewerError(error: unknown): string {
   }
   if (error instanceof Error) {
     if (error.message === DOCUMENT_NOT_FOUND_MESSAGE) return DOCUMENT_NOT_FOUND_UI_MESSAGE;
-    if (error.message === DOCUMENT_DOWNLOAD_FAILED_MESSAGE) return DOCUMENT_DOWNLOAD_FAILED_UI_MESSAGE;
+    if (
+      error.message === DOCUMENT_DOWNLOAD_FAILED_MESSAGE ||
+      error.message.toLowerCase().includes('failed to fetch') ||
+      error.message.toLowerCase().includes('networkerror')
+    ) {
+      return DOCUMENT_DOWNLOAD_FAILED_UI_MESSAGE;
+    }
   }
   return GENERIC_UI_MESSAGE;
 }

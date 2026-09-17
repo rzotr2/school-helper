@@ -8,7 +8,7 @@
  * releasePdfDocument; PdfViewer only renders and never destroys it.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { useAuth } from '../../infrastructure/auth/AuthContext';
 import { downloadDocument } from '../../application/use-cases/documents';
@@ -49,10 +49,15 @@ interface ViewerSession {
 
 export function DocumentViewerPage() {
   const { documentId } = useParams<{ documentId: string }>();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const userId = user?.id;
+
+  const pageParam = searchParams.get('page');
+  const targetPage = pageParam ? parseInt(pageParam, 10) : undefined;
+  const initialPage = targetPage !== undefined && Number.isInteger(targetPage) && targetPage > 0 ? targetPage : 1;
 
   const [session, setSession] = useState<ViewerSession | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -134,7 +139,8 @@ export function DocumentViewerPage() {
           try {
             await saveDocumentContent(userId, documentId, content);
             documentWithContent = { ...document, content };
-          } catch {
+          } catch (err) {
+            console.error('[Viewer] Failed to save document content to database', err);
             // Persistence failure must not block viewing the document.
           }
         }
@@ -265,7 +271,8 @@ export function DocumentViewerPage() {
               ? previous
               : { ...previous, document: { ...previous.document, content: persisted } },
           );
-        } catch {
+        } catch (err) {
+          console.error('[Viewer OCR] Failed to persist page OCR update to database', err);
           // Persistence failure must not change the displayed OCR state.
         }
       };
@@ -325,6 +332,7 @@ export function DocumentViewerPage() {
           inspection={session.inspection}
           downloadName={session.document.originalName}
           downloadSource={session.blob}
+          initialPage={initialPage}
           onRunOcr={(pageNumber) => void runOcrForPage(pageNumber)}
           onClose={handleClose}
         />

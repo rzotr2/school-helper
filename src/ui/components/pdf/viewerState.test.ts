@@ -250,6 +250,12 @@ describe('describeViewerError', () => {
     expect(describeViewerError(new Error('Failed to download document'))).toBe(
       'Das Dokument konnte nicht geladen werden. Bitte versuche es erneut.',
     );
+    expect(describeViewerError(new TypeError('Failed to fetch'))).toBe(
+      'Das Dokument konnte nicht geladen werden. Bitte versuche es erneut.',
+    );
+    expect(describeViewerError(new Error('NetworkError when attempting to fetch resource'))).toBe(
+      'Das Dokument konnte nicht geladen werden. Bitte versuche es erneut.',
+    );
   });
 
   it('falls back to the generic message for unknown errors', () => {

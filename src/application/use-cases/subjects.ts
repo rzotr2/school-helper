@@ -11,6 +11,14 @@ export interface Subject {
   updatedAt: Date;
 }
 
+export const SUBJECTS_CHANGED_EVENT = 'school-helper:subjects-changed';
+
+export function notifySubjectsChanged(): void {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(SUBJECTS_CHANGED_EVENT));
+  }
+}
+
 type SubjectRow = Database['public']['Tables']['subjects']['Row'];
 
 function mapSubject(row: SubjectRow): Subject {

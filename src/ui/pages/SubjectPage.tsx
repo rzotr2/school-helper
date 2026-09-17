@@ -2,7 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Settings, Trash2, Edit2, Loader2, Book, Folder, Plus } from 'lucide-react';
 import { useAuth } from '../../infrastructure/auth/AuthContext';
-import { Subject, getSubjects, updateSubject, deleteSubject } from '../../application/use-cases/subjects';
+import {
+  Subject,
+  getSubjects,
+  updateSubject,
+  deleteSubject,
+  notifySubjectsChanged,
+} from '../../application/use-cases/subjects';
 import { Topic, getTopicsForSubject, createTopic, updateTopic, deleteTopic } from '../../application/use-cases/topics';
 import { Button } from '../components/Button';
 import { NameDialog } from '../components/NameDialog';
@@ -56,14 +62,16 @@ export function SubjectPage() {
   const handleEditSubject = async (name: string) => {
     if (!user || !subject) return;
     await updateSubject(user.id, subject.id, name);
-    window.location.reload(); 
+    notifySubjectsChanged();
+    await loadData();
   };
 
   const handleDeleteSubject = async () => {
     if (!user || !subject) return;
     try {
       await deleteSubject(user.id, subject.id);
-      window.location.href = '/'; 
+      notifySubjectsChanged();
+      navigate('/', { replace: true });
     } catch (err: unknown) {
       console.error("Failed to delete subject", err);
       setError("Fehler beim Löschen des Fachs. Bitte erneut versuchen.");

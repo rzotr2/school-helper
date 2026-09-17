@@ -83,17 +83,51 @@ function isPageNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 1;
 }
 
-function isPersistedPage(value: unknown): value is PageContent {
-  if (typeof value !== 'object' || value === null) return false;
+function normalizeTextQuality(value: unknown, nativeText: string): TextQuality | null {
+  if (isTextQuality(value)) return value;
+  if (typeof value !== 'object' || value === null) return null;
+  const q = value as Record<string, unknown>;
+  if (typeof q.usable !== 'boolean') return null;
+  const fallback = evaluateTextQuality(nativeText);
+  return {
+    usable: q.usable,
+    charCount: typeof q.charCount === 'number' ? q.charCount : fallback.charCount,
+    printableRatio: typeof q.printableRatio === 'number' ? q.printableRatio : fallback.printableRatio,
+    whitespaceRatio: typeof q.whitespaceRatio === 'number' ? q.whitespaceRatio : fallback.whitespaceRatio,
+    alphanumericRatio: typeof q.alphanumericRatio === 'number' ? q.alphanumericRatio : fallback.alphanumericRatio,
+    wordCount: typeof q.wordCount === 'number' ? q.wordCount : fallback.wordCount,
+    replacementCharCount: typeof q.replacementCharCount === 'number' ? q.replacementCharCount : fallback.replacementCharCount,
+    reasons: Array.isArray(q.reasons) && q.reasons.every((r) => typeof r === 'string') ? q.reasons : fallback.reasons,
+  };
+}
+
+function parsePersistedPage(value: unknown): PageContent | null {
+  if (typeof value !== 'object' || value === null) return null;
   const page = value as Record<string, unknown>;
-  return (
-    isPageNumber(page.pageNumber) &&
-    typeof page.nativeText === 'string' &&
-    isTextQuality(page.quality) &&
-    (page.ocrText === null || typeof page.ocrText === 'string') &&
-    typeof page.ocrStatus === 'string' &&
-    PERSISTED_OCR_STATUSES.includes(page.ocrStatus as PersistedOcrStatus)
-  );
+  if (!isPageNumber(page.pageNumber)) return null;
+  if (typeof page.nativeText !== 'string') return null;
+
+  const quality = normalizeTextQuality(page.quality, page.nativeText);
+  if (quality === null) return null;
+
+  if (page.ocrText !== null && typeof page.ocrText !== 'string') return null;
+
+  let ocrStatus: PersistedOcrStatus;
+  if (page.ocrStatus === 'completed' || page.ocrStatus === 'failed' || page.ocrStatus === 'not-generated') {
+    ocrStatus = page.ocrStatus;
+  } else if (page.ocrStatus === 'not-needed') {
+    ocrStatus = 'not-generated';
+  } else {
+    return null;
+  }
+
+  return {
+    pageNumber: page.pageNumber,
+    nativeText: page.nativeText,
+    quality,
+    ocrText: page.ocrText ?? null,
+    ocrStatus,
+  };
 }
 
 /**
@@ -103,15 +137,27 @@ function isPersistedPage(value: unknown): value is PageContent {
  * treat as "no persisted content — inspect the PDF again".
  */
 export function parseDocumentContent(value: unknown): DocumentContent | null {
-  if (typeof value !== 'object' || value === null) return null;
-  const content = value as Record<string, unknown>;
+  let raw = value;
+  if (typeof raw === 'string') {
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+  if (typeof raw !== 'object' || raw === null) return null;
+  const content = raw as Record<string, unknown>;
   if (!Array.isArray(content.pages)) return null;
-  if (!content.pages.every(isPersistedPage)) return null;
-  const pages = content.pages as PageContent[];
+  const parsedPages: PageContent[] = [];
+  for (const pageCandidate of content.pages) {
+    const parsed = parsePersistedPage(pageCandidate);
+    if (parsed === null) return null;
+    parsedPages.push(parsed);
+  }
   // Page boundaries must stay unambiguous (search maps a match to exactly
   // one page): duplicate page numbers mean corrupt data.
-  if (new Set(pages.map((page) => page.pageNumber)).size !== pages.length) return null;
-  return { pages };
+  if (new Set(parsedPages.map((page) => page.pageNumber)).size !== parsedPages.length) return null;
+  return { pages: parsedPages };
 }
 
 // ── Text access ──────────────────────────────────────────────────────────────
@@ -312,10 +358,16 @@ export async function saveDocumentContent(
   // index signatures, hence the assertion to Json.
   const { error } = await supabase
     .from('documents')
-    .update({ content: content as unknown as Json })
+    .update({
+      content: content as unknown as Json,
+      processing_status: 'completed',
+    })
     .eq('id', documentId);
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    console.error('[saveDocumentContent] Database error:', error);
+    throw new Error(error.message);
+  }
 
   return content;
 }
@@ -340,18 +392,30 @@ export async function saveDocumentPage(
     .eq('id', documentId)
     .maybeSingle();
 
-  if (fetchError) throw new Error(fetchError.message);
+  if (fetchError) {
+    console.error('[saveDocumentPage] Fetch error:', fetchError);
+    throw new Error(fetchError.message);
+  }
   if (!row) throw new Error('Document not found');
 
-  const merged = mergePageOcrUpdate(parseDocumentContent(row.content), page);
-  if (merged === null) return null;
+  const parsedCurrent = parseDocumentContent(row.content);
+  const merged = mergePageOcrUpdate(parsedCurrent, page);
+  if (merged === null) {
+    return null;
+  }
 
   const { error: updateError } = await supabase
     .from('documents')
-    .update({ content: merged as unknown as Json })
+    .update({
+      content: merged as unknown as Json,
+      processing_status: 'completed',
+    })
     .eq('id', documentId);
 
-  if (updateError) throw new Error(updateError.message);
+  if (updateError) {
+    console.error('[saveDocumentPage] DB update error:', updateError);
+    throw new Error(updateError.message);
+  }
 
   return merged;
 }

@@ -96,6 +96,26 @@ export async function getDocumentsForTopic(userId: string, topicId: string): Pro
 }
 
 /**
+ * Returns all processed ('completed') documents of the user with their
+ * extracted content populated, newest first. Used by full-text search to
+ * inspect page text without downloading PDF files or bloating standard list queries.
+ */
+export async function getCompletedDocumentsWithContent(userId: string): Promise<Document[]> {
+  if (!userId) throw new Error('User must be authenticated');
+
+  const { data, error } = await supabase
+    .from('documents')
+    .select(DOCUMENT_COLUMNS_WITH_CONTENT)
+    .eq('owner_id', userId)
+    .or('processing_status.eq.completed,content.not.is.null')
+    .order('created_at', { ascending: false });
+
+  if (error) throw new Error(error.message);
+
+  return data.map(mapDocument);
+}
+
+/**
  * Uploads a PDF into Storage and creates its metadata row.
  * If saving the metadata fails, the uploaded object is rolled back.
  */

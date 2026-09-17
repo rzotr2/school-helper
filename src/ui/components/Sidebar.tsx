@@ -3,7 +3,13 @@ import { Folder, FileText, Plus, Loader2 } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { cn } from '../../shared/utils/cn';
 import { useAuth } from '../../infrastructure/auth/AuthContext';
-import { Subject, getSubjects, createSubject } from '../../application/use-cases/subjects';
+import {
+  Subject,
+  getSubjects,
+  createSubject,
+  SUBJECTS_CHANGED_EVENT,
+  notifySubjectsChanged,
+} from '../../application/use-cases/subjects';
 import { getSchoolProfile, createSchoolProfile } from '../../application/use-cases/schoolProfile';
 import { NameDialog } from './NameDialog';
 
@@ -38,10 +44,21 @@ export function Sidebar() {
     }
   }, [user, isAuthLoading]);
 
+  useEffect(() => {
+    const handleSubjectsChanged = () => {
+      void loadData();
+    };
+    window.addEventListener(SUBJECTS_CHANGED_EVENT, handleSubjectsChanged);
+    return () => {
+      window.removeEventListener(SUBJECTS_CHANGED_EVENT, handleSubjectsChanged);
+    };
+  }, [user, isAuthLoading]);
+
   const handleAddSubject = async (name: string) => {
     if (!user) return;
     const position = subjects.length > 0 ? subjects[subjects.length - 1].position + 1 : 0;
     await createSubject(user.id, name, position);
+    notifySubjectsChanged();
     await loadData();
   };
 

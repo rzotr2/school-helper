@@ -43,7 +43,7 @@ export function NameDialog({
     setIsSubmitting(true);
     setError(null);
     try {
-      await onSubmit(name);
+      await onSubmit(name.trim());
       onClose();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message || 'Ein Fehler ist aufgetreten' : 'Ein Fehler ist aufgetreten');

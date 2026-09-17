@@ -100,6 +100,43 @@ describe('parseDocumentContent', () => {
     expect(parseDocumentContent(content)).toEqual(content);
   });
 
+  it('accepts valid stringified JSON content', () => {
+    const content: DocumentContent = { pages: [persistedPage()] };
+    expect(parseDocumentContent(JSON.stringify(content))).toEqual(content);
+  });
+
+  it('normalizes not-needed ocrStatus to not-generated', () => {
+    const raw = {
+      pages: [
+        {
+          ...persistedPage(),
+          ocrStatus: 'not-needed',
+        },
+      ],
+    };
+    const parsed = parseDocumentContent(raw);
+    expect(parsed).not.toBeNull();
+    expect(parsed?.pages[0].ocrStatus).toBe('not-generated');
+  });
+
+  it('normalizes partial quality objects using evaluateTextQuality fallback', () => {
+    const raw = {
+      pages: [
+        {
+          pageNumber: 1,
+          nativeText: 'Some native text',
+          quality: { usable: true },
+          ocrText: null,
+          ocrStatus: 'not-generated',
+        },
+      ],
+    };
+    const parsed = parseDocumentContent(raw);
+    expect(parsed).not.toBeNull();
+    expect(parsed?.pages[0].quality.usable).toBe(true);
+    expect(parsed?.pages[0].quality.charCount).toBe(16);
+  });
+
   // Scenario: page boundaries must stay unambiguous for future search —
   // page numbers that cannot occur in the pipeline mean corrupt data.
   it('rejects a page number of 0', () => {

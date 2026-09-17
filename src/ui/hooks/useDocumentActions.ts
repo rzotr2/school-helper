@@ -60,7 +60,13 @@ export function useDocumentActions(
     if (!userId || !renamingDoc) return;
     setActionError(null);
     const updated = await renameDocument(userId, renamingDoc.id, newName);
-    setDocuments(prev => prev.map(d => (d.id === updated.id ? updated : d)));
+    setDocuments(prev =>
+      prev.map(d =>
+        d.id === updated.id
+          ? { ...d, originalName: updated.originalName, updatedAt: updated.updatedAt }
+          : d,
+      ),
+    );
     setRenamingDoc(null);
   };
 

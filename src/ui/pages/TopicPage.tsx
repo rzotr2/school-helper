@@ -9,7 +9,7 @@ import { Document, getDocumentsForTopic, uploadDocument } from '../../applicatio
 import { canOpenDocument } from '../../application/use-cases/documentContent';
 import { useDocumentActions } from '../hooks/useDocumentActions';
 import { useDocumentProcessing } from '../hooks/useDocumentProcessing';
-import { formatFileSize } from '../../shared/utils/format';
+import { formatFileSize, formatDate } from '../../shared/utils/format';
 import { cn } from '../../shared/utils/cn';
 import { useAuth } from '../../infrastructure/auth/AuthContext';
 import { Subject, getSubjects } from '../../application/use-cases/subjects';
@@ -69,7 +69,7 @@ export function TopicPage() {
         
         const foundSubject = subjects.find(s => s.id === subjectId);
         
-        if (!foundSubject) {
+        if (!foundSubject || foundTopic.subjectId !== subjectId) {
           navigate('/', { replace: true });
           return;
         }
@@ -269,7 +269,7 @@ export function TopicPage() {
                       </p>
                     ) : isOpenable ? (
                       <p className="text-xs text-slate-500">
-                        {formatFileSize(doc.size)} &middot; {doc.createdAt.toLocaleDateString('de-DE')}
+                        {formatFileSize(doc.size)} &middot; {formatDate(doc.createdAt)}
                       </p>
                     ) : doc.processingStatus === 'processing' ? (
                       // A persisted 'processing' row with no live run in this
@@ -297,7 +297,7 @@ export function TopicPage() {
                       title="Verarbeitung wiederholen"
                       aria-label="Verarbeitung wiederholen"
                     >
-                      <RefreshCw className="w-4 h-4" />
+                      <RefreshCw className={cn("w-4 h-4", isProcessing && "animate-spin text-blue-600")} />
                     </button>
                   )}
                   <button

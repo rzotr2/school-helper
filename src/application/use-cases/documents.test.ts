@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { MAX_FILE_SIZE_BYTES, normalizeDocumentName, uploadDocument } from './documents';
+import { MAX_FILE_SIZE_BYTES, normalizeDocumentName, uploadDocument, getCompletedDocumentsWithContent } from './documents';
 
 describe('normalizeDocumentName', () => {
   it('trims surrounding whitespace', () => {
@@ -58,5 +58,11 @@ describe('uploadDocument validation', () => {
   it('rejects an unauthenticated user', async () => {
     const file = new File(['x'], 'ok.pdf', { type: 'application/pdf' });
     await expect(uploadDocument('', 'topic-1', file)).rejects.toThrow('User must be authenticated');
+  });
+});
+
+describe('getCompletedDocumentsWithContent validation', () => {
+  it('rejects an unauthenticated user', async () => {
+    await expect(getCompletedDocumentsWithContent('')).rejects.toThrow('User must be authenticated');
   });
 });

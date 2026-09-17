@@ -35,6 +35,7 @@ import { Button } from '../Button';
 import {
   VIEWER_ZOOM_MAX,
   VIEWER_ZOOM_MIN,
+  clampPage,
   describeViewerError,
   fitPageZoom,
   fitWidthZoom,
@@ -53,6 +54,8 @@ export interface PdfViewerProps {
   downloadName: string;
   /** PDF bytes for the download action; used only to build an object URL. */
   downloadSource: Blob | ArrayBuffer | Uint8Array;
+  /** Initial 1-based page to open at (defaults to 1). */
+  initialPage?: number;
   /** Runs explicit OCR for one page; the parent owns the operation. */
   onRunOcr: (pageNumber: number) => void;
   /** Called when the user closes the viewer; navigation is the parent's job. */
@@ -64,6 +67,7 @@ export function PdfViewer({
   inspection,
   downloadName,
   downloadSource,
+  initialPage = 1,
   onRunOcr,
   onClose,
 }: PdfViewerProps) {
@@ -79,8 +83,12 @@ export function PdfViewer({
 
   const [state, dispatch] = useReducer(
     viewerStateReducer,
-    pdfDocument,
-    (document) => ({ ...initialViewerState(), totalPages: document.numPages }),
+    { pdfDocument, initialPage },
+    ({ pdfDocument: doc, initialPage: startPage }) => ({
+      ...initialViewerState(),
+      totalPages: doc.numPages,
+      page: clampPage(startPage, doc.numPages),
+    }),
   );
   pageRef.current = state.page;
 
@@ -101,7 +109,14 @@ export function PdfViewer({
   useEffect(() => {
     setRenderErrorMessage(null);
     dispatch({ type: 'SET_DOCUMENT', totalPages: pdfDocument.numPages });
-  }, [pdfDocument]);
+    if (initialPage > 1) {
+      dispatch({ type: 'SET_PAGE', page: initialPage });
+    }
+  }, [pdfDocument, initialPage]);
+
+  useEffect(() => {
+    dispatch({ type: 'SET_PAGE', page: initialPage });
+  }, [initialPage]);
 
   // Render the current page at the current zoom. The generation counter and
   // the cancelled flag make sure a superseded render (page/zoom/document
