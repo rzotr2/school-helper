@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Folder, FileText, Plus, Loader2 } from 'lucide-react';
+import { Folder, FileText, Plus, Loader2, GraduationCap } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { cn } from '../../shared/utils/cn';
 import { useAuth } from '../../infrastructure/auth/AuthContext';
@@ -82,6 +82,18 @@ export function Sidebar() {
             >
               <FileText className="w-4 h-4" />
               Alle Dateien
+            </NavLink>
+            <NavLink
+              to="/learn"
+              className={({ isActive }) =>
+                cn(
+                  "flex items-center gap-2 px-2 py-1.5 text-sm rounded-md transition-colors",
+                  isActive ? "bg-blue-50 text-blue-700 font-medium" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                )
+              }
+            >
+              <GraduationCap className="w-4 h-4" />
+              Lernen
             </NavLink>
           </nav>
         </div>

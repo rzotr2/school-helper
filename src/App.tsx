@@ -9,6 +9,7 @@ import { MainLayout } from './ui/layouts/MainLayout';
 import { Home } from './ui/pages/Home';
 import { SubjectPage } from './ui/pages/SubjectPage';
 import { TopicPage } from './ui/pages/TopicPage';
+import { LearnPage } from './ui/pages/LearnPage';
 import { AuthProvider, useAuth } from './infrastructure/auth/AuthContext';
 import { Button } from './ui/components/Button';
 import { BookOpen } from 'lucide-react';
@@ -60,6 +61,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<RequireAuth><MainLayout /></RequireAuth>}>
             <Route index element={<Home />} />
+            <Route path="learn" element={<LearnPage />} />
             <Route path="subject/:subjectId" element={<SubjectPage />} />
             <Route path="subject/:subjectId/topic/:topicId" element={<TopicPage />} />
             <Route
