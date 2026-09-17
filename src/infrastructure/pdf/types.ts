@@ -51,7 +51,39 @@ export type TextBlockType = 'paragraph' | 'heading' | 'list';
 export interface TextBlock {
   text: string;
   type: TextBlockType;
+  /**
+   * Approximate PDF Y coordinate of the first line's baseline (PDF user
+   * space: origin bottom-left, Y increases upward). Used for structural
+   * ordering alongside annotations. Optional: absent on legacy content.
+   */
+  y?: number;
 }
+
+/**
+ * Lightweight annotation representation persisted in PageContent.
+ * Only annotations with textual content are persisted; decorative
+ * annotations (links without text, widgets) stay in the runtime model.
+ */
+export interface PersistedAnnotation {
+  /** Annotation text content (always non-empty). */
+  content: string;
+  /** pdf.js annotation type name, e.g. 'TEXT', 'FREETEXT', 'HIGHLIGHT'. */
+  type: string;
+  /**
+   * PDF Y coordinate of the annotation's top edge (PDF user space: origin
+   * bottom-left, Y increases upward). Null when the PDF exposes no rect.
+   */
+  y: number | null;
+}
+
+/**
+ * A single element in the reading-order sequence of a DocumentSection.
+ * Either a native text block or a persisted annotation, interleaved by
+ * their vertical position on the page.
+ */
+export type StructuralItem =
+  | { kind: 'block'; block: TextBlock }
+  | { kind: 'annotation'; annotation: PersistedAnnotation };
 
 /**
  * Deterministic logical section of a document, grouping related blocks
@@ -59,9 +91,16 @@ export interface TextBlock {
  */
 export interface DocumentSection {
   title: string | null;
+  /** Native text blocks (legacy representation, always present). */
   blocks: TextBlock[];
   pageStart: number;
   pageEnd: number;
+  /**
+   * Ordered sequence of blocks and annotations sorted by vertical page
+   * position (top-to-bottom reading order). Optional: absent on legacy
+   * content or documents without annotations.
+   */
+  items?: StructuralItem[];
 }
 
 /** Inspection result of one page: two independent text representations. */

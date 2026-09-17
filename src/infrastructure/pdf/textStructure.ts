@@ -1,5 +1,17 @@
-import type { DocumentSection, TextBlock, TextBlockType } from './types';
-export type { DocumentSection, TextBlock, TextBlockType };
+import type {
+  DocumentSection,
+  PersistedAnnotation,
+  StructuralItem,
+  TextBlock,
+  TextBlockType,
+} from './types';
+export type {
+  DocumentSection,
+  PersistedAnnotation,
+  StructuralItem,
+  TextBlock,
+  TextBlockType,
+};
 
 /**
  * Minimal interface representing a pdf.js TextItem or compatible item.
@@ -193,7 +205,7 @@ export function extractTextBlocks(items: readonly unknown[]): TextBlock[] {
       type = 'list';
     }
 
-    blocks.push({ text, type });
+    blocks.push({ text, type, y: firstLine.y });
     currentBlockLines = [];
   };
 
@@ -234,21 +246,28 @@ export function extractTextBlocks(items: readonly unknown[]): TextBlock[] {
 export interface SectionBuildingPage {
   pageNumber: number;
   blocks?: TextBlock[];
+  annotations?: PersistedAnnotation[];
 }
 
 /**
- * Builds deterministic document sections from page-level TextBlocks.
+ * Builds deterministic document sections from page-level TextBlocks and optional PersistedAnnotations.
  *
  * Rules:
  * 1. Iterates pages in ascending pageNumber order.
- * 2. Within each page, iterates blocks in order.
- * 3. A block with `type === 'heading'` starts a new section.
- * 4. Content before the first heading forms an untitled section (`title: null`).
- * 5. Sections can span multiple pages until the next heading is encountered.
- * 6. Pages without blocks are skipped and do not extend pageEnd or synthesize fake sections.
- * 7. Blocks and text content are preserved exactly without rewriting.
+ * 2. On each page, normalizes and orders items:
+ *    - All positioned items (blocks with y and annotations with y) are sorted top-to-bottom (descending y, since PDF user-space y increases upward).
+ *    - Stable tie-breaking: if y coordinates match, blocks come before annotations, and original relative order is preserved.
+ *    - Items without coordinates (y === undefined on legacy blocks, y === null on annotations) are placed at the end of the page.
+ * 3. Headings (`kind: 'block'` with `type === 'heading'`) define new section boundaries.
+ * 4. Annotations never create sections; they belong to the current section (or the untitled first section if before any heading).
+ * 5. Content before the first heading forms an untitled section (`title: null`).
+ * 6. Sections can span multiple pages until the next heading is encountered.
+ * 7. Pages with neither blocks nor annotations are skipped and do not synthesize empty sections.
+ * 8. Each DocumentSection provides:
+ *    - `blocks`: TextBlock[] containing only native text blocks (for full backward compatibility).
+ *    - `items`: StructuralItem[] containing the unified ordered sequence of blocks and annotations.
  *
- * Returns an empty array when there are no usable blocks.
+ * Returns an empty array when there are no usable blocks or annotations.
  */
 export function buildDocumentSections(
   pages: readonly SectionBuildingPage[] | null | undefined,
@@ -264,42 +283,115 @@ export function buildDocumentSections(
   let currentSection: DocumentSection | null = null;
 
   for (const page of sortedPages) {
-    if (!page || !Array.isArray(page.blocks) || page.blocks.length === 0) {
+    if (!page) continue;
+
+    const rawBlocks: readonly TextBlock[] = Array.isArray(page.blocks) ? page.blocks : [];
+    const rawAnnotations: readonly PersistedAnnotation[] = Array.isArray(page.annotations)
+      ? page.annotations
+      : [];
+
+    const validBlocks = rawBlocks.filter(
+      (b: TextBlock): b is TextBlock =>
+        Boolean(b) && typeof b.text === 'string' && typeof b.type === 'string',
+    );
+    const validAnnotations = rawAnnotations.filter(
+      (a: PersistedAnnotation): a is PersistedAnnotation =>
+        Boolean(a) && typeof a.content === 'string' && typeof a.type === 'string',
+    );
+
+    if (validBlocks.length === 0 && validAnnotations.length === 0) {
       continue;
     }
 
-    for (const block of page.blocks) {
-      if (!block || typeof block.text !== 'string' || typeof block.type !== 'string') {
-        continue;
-      }
+    // Determine if any items have coordinates or if this is entirely legacy/coordinate-free
+    const hasCoordinates =
+      validBlocks.some((b: TextBlock) => typeof b.y === 'number') ||
+      validAnnotations.some((a: PersistedAnnotation) => typeof a.y === 'number');
 
-      if (block.type === 'heading') {
-        if (currentSection !== null && currentSection.blocks.length > 0) {
+    let pageItems: StructuralItem[];
+
+    if (!hasCoordinates && validAnnotations.length === 0) {
+      // Legacy path or completely coordinate-free native blocks: keep original block order directly
+      pageItems = validBlocks.map((block: TextBlock) => ({ kind: 'block' as const, block }));
+    } else {
+      type ItemWithOrder = {
+        item: StructuralItem;
+        y: number | null;
+        kind: 'block' | 'annotation';
+        index: number;
+      };
+
+      const itemsWithOrder: ItemWithOrder[] = [];
+
+      validBlocks.forEach((block: TextBlock, index: number) => {
+        itemsWithOrder.push({
+          item: { kind: 'block', block },
+          y: typeof block.y === 'number' ? block.y : null,
+          kind: 'block',
+          index,
+        });
+      });
+
+      validAnnotations.forEach((annotation: PersistedAnnotation, index: number) => {
+        itemsWithOrder.push({
+          item: { kind: 'annotation', annotation },
+          y: typeof annotation.y === 'number' ? annotation.y : null,
+          kind: 'annotation',
+          index: validBlocks.length + index,
+        });
+      });
+
+      const positioned = itemsWithOrder.filter((entry) => entry.y !== null);
+      const unpositioned = itemsWithOrder.filter((entry) => entry.y === null);
+
+      // PDF user-space: larger y is higher on the page (top).
+      // Sort positioned top-to-bottom: descending by y.
+      positioned.sort((a, b) => {
+        const yDiff = (b.y as number) - (a.y as number);
+        if (yDiff !== 0) return yDiff;
+        // Tie-breaker: blocks before annotations
+        if (a.kind !== b.kind) {
+          return a.kind === 'block' ? -1 : 1;
+        }
+        return a.index - b.index;
+      });
+
+      pageItems = [...positioned, ...unpositioned].map((entry) => entry.item);
+    }
+
+    for (const item of pageItems) {
+      if (item.kind === 'block' && item.block.type === 'heading') {
+        if (currentSection !== null && (currentSection.blocks.length > 0 || (currentSection.items && currentSection.items.length > 0))) {
           sections.push(currentSection);
         }
         currentSection = {
-          title: block.text,
-          blocks: [block],
+          title: item.block.text,
+          blocks: [item.block],
           pageStart: page.pageNumber,
           pageEnd: page.pageNumber,
+          items: [item],
         };
       } else {
         if (currentSection === null) {
           currentSection = {
             title: null,
-            blocks: [block],
+            blocks: item.kind === 'block' ? [item.block] : [],
             pageStart: page.pageNumber,
             pageEnd: page.pageNumber,
+            items: [item],
           };
         } else {
-          currentSection.blocks.push(block);
+          if (item.kind === 'block') {
+            currentSection.blocks.push(item.block);
+          }
+          currentSection.items?.push(item);
           currentSection.pageEnd = page.pageNumber;
         }
       }
     }
   }
 
-  if (currentSection !== null && currentSection.blocks.length > 0) {
+  if (currentSection !== null && (currentSection.blocks.length > 0 || (currentSection.items && currentSection.items.length > 0))) {
     sections.push(currentSection);
   }
 

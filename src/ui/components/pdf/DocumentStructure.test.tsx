@@ -193,4 +193,48 @@ describe('DocumentStructure component', () => {
 
     expect(container.textContent).toContain('Lade Dokumentstruktur…');
   });
+
+  it('renders interleaved annotation items with proper styling badge', async () => {
+    const annotatedContent: DocumentContent = {
+      pages: [
+        {
+          pageNumber: 1,
+          nativeText: 'Text 1',
+          quality: { usable: true, charCount: 10, printableRatio: 1, whitespaceRatio: 0.2, alphanumericRatio: 0.8, wordCount: 2, replacementCharCount: 0, reasons: [] },
+          ocrText: null,
+          ocrStatus: 'not-generated',
+          blocks: [
+            { type: 'heading', text: 'Aufgabenstellung' },
+            { type: 'paragraph', text: 'Bitte beantworten.' },
+          ],
+          annotations: [
+            { type: 'TEXT', content: 'Handschriftliche Notiz des Schülers', y: 450 },
+          ],
+        },
+      ],
+      sections: [
+        {
+          title: 'Aufgabenstellung',
+          blocks: [
+            { type: 'heading', text: 'Aufgabenstellung' },
+            { type: 'paragraph', text: 'Bitte beantworten.' },
+          ],
+          pageStart: 1,
+          pageEnd: 1,
+          items: [
+            { kind: 'block', block: { type: 'heading', text: 'Aufgabenstellung' } },
+            { kind: 'annotation', annotation: { type: 'TEXT', content: 'Handschriftliche Notiz des Schülers', y: 450 } },
+            { kind: 'block', block: { type: 'paragraph', text: 'Bitte beantworten.' } },
+          ],
+        },
+      ],
+    };
+
+    await renderComponent(<DocumentStructure content={annotatedContent} />);
+
+    expect(container.textContent).toContain('Aufgabenstellung');
+    expect(container.textContent).toContain('Anmerkung (TEXT)');
+    expect(container.textContent).toContain('Handschriftliche Notiz des Schülers');
+    expect(container.textContent).toContain('Bitte beantworten.');
+  });
 });

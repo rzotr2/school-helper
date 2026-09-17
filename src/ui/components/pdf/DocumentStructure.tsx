@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, Layers, ExternalLink, Loader2 } from 'lucide-react';
+import { ChevronRight, Layers, ExternalLink, Loader2, MessageSquare } from 'lucide-react';
 import type { DocumentContent } from '../../../application/use-cases/documentContent';
 import { getDocumentSections } from '../../../application/use-cases/documentContent';
 import { cn } from '../../../shared/utils/cn';
@@ -174,30 +174,73 @@ export function DocumentStructure({
 
               {isExpanded && (
                 <div className="px-4 pb-3.5 pt-1 space-y-2 border-t border-slate-100 bg-slate-50/40 text-xs">
-                  {section.blocks.map((block, bIdx) => {
-                    if (block.type === 'heading') {
-                      return (
-                        <h5 key={bIdx} className="text-xs font-semibold text-slate-900 pt-1.5 first:pt-0">
-                          {block.text}
-                        </h5>
-                      );
-                    }
-                    if (block.type === 'list') {
-                      return (
-                        <div
-                          key={bIdx}
-                          className="text-xs text-slate-700 pl-2.5 border-l-2 border-blue-300/80 whitespace-pre-line leading-relaxed"
-                        >
-                          {block.text}
-                        </div>
-                      );
-                    }
-                    return (
-                      <p key={bIdx} className="text-xs text-slate-700 leading-relaxed whitespace-pre-line">
-                        {block.text}
-                      </p>
-                    );
-                  })}
+                  {section.items && section.items.length > 0
+                    ? section.items.map((item, iIdx) => {
+                        if (item.kind === 'annotation') {
+                          return (
+                            <div
+                              key={iIdx}
+                              className="p-2 rounded bg-amber-50/80 border border-amber-200/80 text-amber-900 leading-relaxed space-y-0.5"
+                            >
+                              <div className="flex items-center gap-1.5 text-[10px] font-semibold text-amber-700 tracking-wide uppercase">
+                                <MessageSquare className="w-3 h-3 text-amber-600" />
+                                <span>Anmerkung ({item.annotation.type})</span>
+                              </div>
+                              <p className="text-xs text-amber-950 whitespace-pre-line">
+                                {item.annotation.content}
+                              </p>
+                            </div>
+                          );
+                        }
+
+                        const block = item.block;
+                        if (block.type === 'heading') {
+                          return (
+                            <h5 key={iIdx} className="text-xs font-semibold text-slate-900 pt-1.5 first:pt-0">
+                              {block.text}
+                            </h5>
+                          );
+                        }
+                        if (block.type === 'list') {
+                          return (
+                            <div
+                              key={iIdx}
+                              className="text-xs text-slate-700 pl-2.5 border-l-2 border-blue-300/80 whitespace-pre-line leading-relaxed"
+                            >
+                              {block.text}
+                            </div>
+                          );
+                        }
+                        return (
+                          <p key={iIdx} className="text-xs text-slate-700 leading-relaxed whitespace-pre-line">
+                            {block.text}
+                          </p>
+                        );
+                      })
+                    : section.blocks.map((block, bIdx) => {
+                        if (block.type === 'heading') {
+                          return (
+                            <h5 key={bIdx} className="text-xs font-semibold text-slate-900 pt-1.5 first:pt-0">
+                              {block.text}
+                            </h5>
+                          );
+                        }
+                        if (block.type === 'list') {
+                          return (
+                            <div
+                              key={bIdx}
+                              className="text-xs text-slate-700 pl-2.5 border-l-2 border-blue-300/80 whitespace-pre-line leading-relaxed"
+                            >
+                              {block.text}
+                            </div>
+                          );
+                        }
+                        return (
+                          <p key={bIdx} className="text-xs text-slate-700 leading-relaxed whitespace-pre-line">
+                            {block.text}
+                          </p>
+                        );
+                      })}
                 </div>
               )}
             </div>

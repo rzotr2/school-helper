@@ -691,6 +691,11 @@ describe('DocumentSections persistence and accessors', () => {
         ],
         pageStart: 1,
         pageEnd: 2,
+        items: [
+          { kind: 'block', block: { type: 'heading', text: 'Einleitung' } },
+          { kind: 'block', block: { type: 'paragraph', text: 'Start' } },
+          { kind: 'block', block: { type: 'paragraph', text: 'Fortsetzung' } },
+        ],
       },
     ]);
   });
@@ -715,5 +720,108 @@ describe('DocumentSections persistence and accessors', () => {
     expect(getDocumentSections(null)).toBeNull();
     expect(getDocumentSections({ pages: [persistedPage()] })).toBeNull();
     expect(getDocumentSections({ pages: [persistedPage()], sections: [validSection] })).toEqual([validSection]);
+  });
+
+  it('inspectionToDocumentContent maps text-bearing annotations into PageContent and interleaves into section items', () => {
+    const inspectionResult: PdfInspectionResult = {
+      pageCount: 1,
+      annotations: [
+        {
+          pageNumber: 1,
+          type: 'TEXT',
+          subtype: 'Text',
+          content: 'Schülerantwort auf Seite 1',
+          rect: { x: 100, y: 500, width: 20, height: 20 },
+          url: null,
+          targetPageNumber: null,
+        },
+        {
+          pageNumber: 1,
+          type: 'LINK',
+          subtype: 'Link',
+          content: null, // empty / decorative annotation - must be filtered out
+          rect: { x: 50, y: 300, width: 100, height: 15 },
+          url: 'https://example.com',
+          targetPageNumber: null,
+        },
+      ],
+      hasUsableText: true,
+      pages: [
+        inspectionPage({
+          pageNumber: 1,
+          blocks: [
+            { type: 'heading', text: 'Aufgabe 1', y: 700 },
+            { type: 'paragraph', text: 'Fragetext', y: 400 },
+          ],
+        }),
+      ],
+    };
+
+    const content = inspectionToDocumentContent(inspectionResult);
+
+    // Persisted page contains lightweight annotations
+    expect(content.pages[0].annotations).toEqual([
+      {
+        type: 'TEXT',
+        content: 'Schülerantwort auf Seite 1',
+        y: 520, // rect.y (500) + rect.height (20) = 520 (top edge)
+      },
+    ]);
+
+    // Sections contain interleaved items
+    expect(content.sections).toHaveLength(1);
+    const section = content.sections![0];
+    expect(section.blocks).toHaveLength(2); // legacy blocks intact
+    expect(section.items).toEqual([
+      { kind: 'block', block: { type: 'heading', text: 'Aufgabe 1', y: 700 } },
+      { kind: 'annotation', annotation: { type: 'TEXT', content: 'Schülerantwort auf Seite 1', y: 520 } },
+      { kind: 'block', block: { type: 'paragraph', text: 'Fragetext', y: 400 } },
+    ]);
+  });
+
+  it('parseDocumentContent validates and round-trips PageContent.annotations and DocumentSection.items', () => {
+    const raw = {
+      pages: [
+        {
+          pageNumber: 1,
+          nativeText: 'Some text',
+          quality: {
+            usable: true,
+            charCount: 9,
+            printableRatio: 1,
+            whitespaceRatio: 0.1,
+            alphanumericRatio: 0.9,
+            wordCount: 2,
+            replacementCharCount: 0,
+            reasons: [],
+          },
+          ocrText: null,
+          ocrStatus: 'not-generated',
+          blocks: [{ text: 'Some text', type: 'paragraph', y: 500 }],
+          annotations: [{ content: 'Notiz', type: 'TEXT', y: 450 }],
+        },
+      ],
+      sections: [
+        {
+          title: null,
+          blocks: [{ text: 'Some text', type: 'paragraph', y: 500 }],
+          pageStart: 1,
+          pageEnd: 1,
+          items: [
+            { kind: 'block', block: { text: 'Some text', type: 'paragraph', y: 500 } },
+            { kind: 'annotation', annotation: { content: 'Notiz', type: 'TEXT', y: 450 } },
+          ],
+        },
+      ],
+    };
+
+    const parsed = parseDocumentContent(raw);
+    expect(parsed).not.toBeNull();
+    expect(parsed?.pages[0].annotations).toEqual([{ content: 'Notiz', type: 'TEXT', y: 450 }]);
+    expect(parsed?.sections?.[0].items).toHaveLength(2);
+    expect(parsed?.sections?.[0].items?.[1]).toEqual({
+      kind: 'annotation',
+      annotation: { content: 'Notiz', type: 'TEXT', y: 450 },
+    });
   });
 });

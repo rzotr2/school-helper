@@ -6,8 +6,21 @@ import type {
 
 export type { DocumentProcessingStatus };
 import { evaluateTextQuality } from '../../infrastructure/pdf/textQuality';
-import type { TextBlock, TextBlockType, TextQuality, DocumentSection } from '../../infrastructure/pdf/types';
-export type { TextBlock, TextBlockType, DocumentSection };
+import type {
+  TextBlock,
+  TextBlockType,
+  TextQuality,
+  DocumentSection,
+  PersistedAnnotation,
+  StructuralItem,
+} from '../../infrastructure/pdf/types';
+export type {
+  TextBlock,
+  TextBlockType,
+  DocumentSection,
+  PersistedAnnotation,
+  StructuralItem,
+};
 import { buildDocumentSections } from '../../infrastructure/pdf/textStructure';
 export { buildDocumentSections };
 import {
@@ -22,11 +35,8 @@ import {
  * representations (nativeText + ocrText) plus processing metadata, stored
  * in the documents.content jsonb column.
  *
- * The persisted model is deliberately smaller than the runtime inspection
- * model: transient states ('pending'/'processing') are never stored, and
- * annotations/rendering data stay out — only serializable text data is
- * persisted. The original PDF in Storage remains the visual source of
- * truth and the input for any future re-processing.
+ * Annotations with non-empty content are persisted per page with their normalized
+ * Y-position to allow deterministic reading-order reconstruction.
  */
 
 /**
@@ -55,6 +65,11 @@ export interface PageContent {
    * Optional: absent when no structure was extracted or on legacy content.
    */
   blocks?: TextBlock[];
+  /**
+   * Deterministic lightweight annotations extracted from the PDF annotation layer.
+   * Optional: absent when page has no text-bearing annotations or on legacy content.
+   */
+  annotations?: PersistedAnnotation[];
 }
 
 /** The documents.content column: all persisted pages and optional document sections. */
@@ -122,7 +137,8 @@ function isTextBlock(value: unknown): value is TextBlock {
   return (
     typeof block.text === 'string' &&
     typeof block.type === 'string' &&
-    VALID_BLOCK_TYPES.includes(block.type as TextBlockType)
+    VALID_BLOCK_TYPES.includes(block.type as TextBlockType) &&
+    (block.y === undefined || typeof block.y === 'number')
   );
 }
 
@@ -132,9 +148,38 @@ function parseBlocks(value: unknown): TextBlock[] | null | undefined {
   const blocks: TextBlock[] = [];
   for (const item of value) {
     if (!isTextBlock(item)) return null;
-    blocks.push({ text: item.text, type: item.type });
+    blocks.push({
+      text: item.text,
+      type: item.type,
+      ...(typeof item.y === 'number' ? { y: item.y } : {}),
+    });
   }
   return blocks;
+}
+
+function isPersistedAnnotation(value: unknown): value is PersistedAnnotation {
+  if (typeof value !== 'object' || value === null) return false;
+  const annotation = value as Record<string, unknown>;
+  return (
+    typeof annotation.content === 'string' &&
+    typeof annotation.type === 'string' &&
+    (annotation.y === null || typeof annotation.y === 'number')
+  );
+}
+
+function parseAnnotations(value: unknown): PersistedAnnotation[] | null | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) return null;
+  const annotations: PersistedAnnotation[] = [];
+  for (const item of value) {
+    if (!isPersistedAnnotation(item)) return null;
+    annotations.push({
+      content: item.content,
+      type: item.type,
+      y: item.y,
+    });
+  }
+  return annotations;
 }
 
 function parsePersistedPage(value: unknown): PageContent | null {
@@ -160,6 +205,9 @@ function parsePersistedPage(value: unknown): PageContent | null {
   const parsedBlocks = parseBlocks(page.blocks);
   if (parsedBlocks === null) return null;
 
+  const parsedAnnotations = parseAnnotations(page.annotations);
+  if (parsedAnnotations === null) return null;
+
   return {
     pageNumber: page.pageNumber,
     nativeText: page.nativeText,
@@ -167,7 +215,20 @@ function parsePersistedPage(value: unknown): PageContent | null {
     ocrText: page.ocrText ?? null,
     ocrStatus,
     ...(parsedBlocks !== undefined ? { blocks: parsedBlocks } : {}),
+    ...(parsedAnnotations !== undefined ? { annotations: parsedAnnotations } : {}),
   };
+}
+
+function isStructuralItem(value: unknown): value is StructuralItem {
+  if (typeof value !== 'object' || value === null) return false;
+  const candidate = value as Record<string, unknown>;
+  if (candidate.kind === 'block') {
+    return isTextBlock(candidate.block);
+  }
+  if (candidate.kind === 'annotation') {
+    return isPersistedAnnotation(candidate.annotation);
+  }
+  return false;
 }
 
 function isDocumentSection(value: unknown): value is DocumentSection {
@@ -178,7 +239,12 @@ function isDocumentSection(value: unknown): value is DocumentSection {
   if (!isPageNumber(section.pageEnd)) return false;
   if (section.pageStart > section.pageEnd) return false;
   if (!Array.isArray(section.blocks)) return false;
-  return section.blocks.every(isTextBlock);
+  if (!section.blocks.every(isTextBlock)) return false;
+  if (section.items !== undefined) {
+    if (!Array.isArray(section.items)) return false;
+    if (!section.items.every(isStructuralItem)) return false;
+  }
+  return true;
 }
 
 function parseSections(value: unknown): DocumentSection[] | null | undefined {
@@ -189,9 +255,36 @@ function parseSections(value: unknown): DocumentSection[] | null | undefined {
     if (!isDocumentSection(item)) return null;
     sections.push({
       title: item.title,
-      blocks: item.blocks.map((b) => ({ text: b.text, type: b.type })),
+      blocks: item.blocks.map((b) => ({
+        text: b.text,
+        type: b.type,
+        ...(typeof b.y === 'number' ? { y: b.y } : {}),
+      })),
       pageStart: item.pageStart,
       pageEnd: item.pageEnd,
+      ...(item.items !== undefined
+        ? {
+            items: item.items.map((it) =>
+              it.kind === 'block'
+                ? {
+                    kind: 'block' as const,
+                    block: {
+                      text: it.block.text,
+                      type: it.block.type,
+                      ...(typeof it.block.y === 'number' ? { y: it.block.y } : {}),
+                    },
+                  }
+                : {
+                    kind: 'annotation' as const,
+                    annotation: {
+                      content: it.annotation.content,
+                      type: it.annotation.type,
+                      y: it.annotation.y,
+                    },
+                  },
+            ),
+          }
+        : {}),
     });
   }
   return sections;
@@ -328,16 +421,37 @@ function toPersistedOcrStatus(status: OcrStatus): PersistedOcrStatus {
 /**
  * The persisted snapshot of a full inspection result. Transient states
  * collapse to 'not-generated'; only final OCR outcomes are stored.
+ *
+ * Annotations with non-empty content are mapped to lightweight PersistedAnnotations
+ * attached to each page, and used by buildDocumentSections to produce reading-order items.
  */
 export function inspectionToDocumentContent(inspection: PdfInspectionResult): DocumentContent {
-  const pages: PageContent[] = inspection.pages.map((page) => ({
-    pageNumber: page.pageNumber,
-    nativeText: page.nativeText,
-    quality: page.quality,
-    ocrText: page.ocrText,
-    ocrStatus: toPersistedOcrStatus(page.ocrStatus),
-    ...(page.blocks !== undefined ? { blocks: page.blocks } : {}),
-  }));
+  const annotationsByPage = new Map<number, PersistedAnnotation[]>();
+  for (const ann of inspection.annotations ?? []) {
+    if (typeof ann.content !== 'string' || ann.content.trim().length === 0) {
+      continue;
+    }
+    const pageAnnotations = annotationsByPage.get(ann.pageNumber) ?? [];
+    pageAnnotations.push({
+      content: ann.content.trim(),
+      type: ann.type,
+      y: ann.rect ? ann.rect.y + ann.rect.height : null,
+    });
+    annotationsByPage.set(ann.pageNumber, pageAnnotations);
+  }
+
+  const pages: PageContent[] = inspection.pages.map((page) => {
+    const pageAnns = annotationsByPage.get(page.pageNumber);
+    return {
+      pageNumber: page.pageNumber,
+      nativeText: page.nativeText,
+      quality: page.quality,
+      ocrText: page.ocrText,
+      ocrStatus: toPersistedOcrStatus(page.ocrStatus),
+      ...(page.blocks !== undefined ? { blocks: page.blocks } : {}),
+      ...(pageAnns && pageAnns.length > 0 ? { annotations: pageAnns } : {}),
+    };
+  });
 
   const sections = buildDocumentSections(pages);
 
@@ -396,6 +510,7 @@ export function documentContentToInspection(
 export function persistedPageFromOcrUpdate(
   page: PdfPageInspection,
   update: { ocrText: string | null; ocrStatus: PersistedOcrStatus },
+  existingPage?: PageContent | null,
 ): PageContent {
   return {
     pageNumber: page.pageNumber,
@@ -404,6 +519,7 @@ export function persistedPageFromOcrUpdate(
     ocrText: update.ocrText,
     ocrStatus: update.ocrStatus,
     ...(page.blocks !== undefined ? { blocks: page.blocks } : {}),
+    ...(existingPage?.annotations !== undefined ? { annotations: existingPage.annotations } : {}),
   };
 }
 
@@ -445,10 +561,14 @@ export function mergePageOcrUpdate(
   if (page.ocrStatus === 'failed' && (existing?.ocrText ?? null) !== null) {
     return null;
   }
-  const persistedPage: PageContent =
-    page.ocrStatus === 'failed' && page.ocrText !== null
-      ? { ...page, ocrStatus: 'completed' }
+  const basePage =
+    existing?.annotations !== undefined && page.annotations === undefined
+      ? { ...page, annotations: existing.annotations }
       : page;
+  const persistedPage: PageContent =
+    basePage.ocrStatus === 'failed' && basePage.ocrText !== null
+      ? { ...basePage, ocrStatus: 'completed' }
+      : basePage;
   return withPageContent(content, persistedPage);
 }
 

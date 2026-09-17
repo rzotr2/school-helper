@@ -20,6 +20,7 @@ describe('extractTextBlocks', () => {
       {
         text: 'Hallo Welt',
         type: 'paragraph',
+        y: 700,
       },
     ]);
   });
@@ -37,10 +38,12 @@ describe('extractTextBlocks', () => {
       {
         text: 'Kapitel 1: Einleitung',
         type: 'heading',
+        y: 750,
       },
       {
         text: 'Dies ist der erste Absatz.\nEr geht in der zweiten Zeile weiter.',
         type: 'paragraph',
+        y: 715,
       },
     ]);
   });
@@ -59,18 +62,22 @@ describe('extractTextBlocks', () => {
     expect(blocks[0]).toEqual<TextBlock>({
       text: 'Uebersicht der Aufgaben:',
       type: 'paragraph',
+      y: 750,
     });
     expect(blocks[1]).toEqual<TextBlock>({
       text: '- Erste Aufgabe bearbeiten\n- Zweite Aufgabe pruefen',
       type: 'list',
+      y: 730,
     });
     expect(blocks[2]).toEqual<TextBlock>({
       text: '1. Erste nummerierte Frage\n2. Zweite nummerierte Frage',
       type: 'list',
+      y: 690,
     });
     expect(blocks[3]).toEqual<TextBlock>({
       text: 'Abschliessender Fliesstext.',
       type: 'paragraph',
+      y: 630,
     });
   });
 
@@ -86,10 +93,12 @@ describe('extractTextBlocks', () => {
       {
         text: 'Erster Absatz, Zeile 1.\nErster Absatz, Zeile 2.',
         type: 'paragraph',
+        y: 750,
       },
       {
         text: 'Zweiter Absatz nach Leerzeile.',
         type: 'paragraph',
+        y: 690,
       },
     ]);
   });
