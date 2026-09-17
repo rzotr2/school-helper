@@ -561,7 +561,7 @@ export function LearnPage() {
 
       {/* Configuration Section (when no active task and session not finished) */}
       {!currentTask && !isGenerating && !isSessionComplete && (
-        <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-2xs space-y-6">
+        <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-6 shadow-2xs space-y-6">
           {/* Step 1: Select Subject */}
           <div className="space-y-2">
             <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
@@ -577,7 +577,7 @@ export function LearnPage() {
                     key={s.id}
                     onClick={() => handleSelectSubject(s.id)}
                     className={cn(
-                      'px-3.5 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer border',
+                      'flex-grow sm:flex-initial min-w-[120px] text-center justify-center px-3.5 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer border',
                       selectedSubjectId === s.id
                         ? 'bg-blue-50 border-blue-300 text-blue-800 shadow-2xs'
                         : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50',
@@ -593,7 +593,7 @@ export function LearnPage() {
           {/* Step 2: Select Topics */}
           {selectedSubjectId && (
             <div className="space-y-2 pt-4 border-t border-slate-100">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2">
                 <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
                   <Layers className="w-4 h-4 text-slate-400" />
                   <span>2. Themen auswählen (mindestens eins)</span>
@@ -611,7 +611,7 @@ export function LearnPage() {
                         setSelectedTopicIds(selectableTopics.map((t) => t.id));
                       }
                     }}
-                    className="text-xs text-blue-600 hover:text-blue-800 font-medium cursor-pointer"
+                    className="text-xs text-blue-600 hover:text-blue-800 font-medium cursor-pointer self-start sm:self-auto"
                   >
                     {selectableTopics.every((t) => selectedTopicIds.includes(t.id))
                       ? 'Auswahl aufheben'
@@ -648,7 +648,7 @@ export function LearnPage() {
                               : undefined
                           }
                           className={cn(
-                            'px-3 py-1.5 rounded-lg text-xs font-medium transition-all border flex items-center gap-1.5',
+                            'flex-grow sm:flex-initial min-w-[140px] justify-between sm:justify-start px-3 py-2 rounded-lg text-xs font-medium transition-all border flex items-center gap-2',
                             !isSelectable &&
                               'opacity-45 bg-slate-100/80 border-slate-200 text-slate-400 cursor-not-allowed shadow-none',
                             isSelectable &&
@@ -659,11 +659,11 @@ export function LearnPage() {
                               'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 cursor-pointer',
                           )}
                         >
-                          <span>{t.name}</span>
+                          <span className="truncate flex-1 min-w-0 text-left">{t.name}</span>
                           {isSelectable ? (
                             <span
                               className={cn(
-                                'text-[10px] px-1.5 py-0.2 rounded font-normal',
+                                'text-[10px] px-1.5 py-0.5 rounded font-normal shrink-0',
                                 isSelected
                                   ? 'bg-slate-800 text-slate-300'
                                   : 'bg-slate-200/80 text-slate-600',
@@ -672,11 +672,11 @@ export function LearnPage() {
                               {docCount} Dok.
                             </span>
                           ) : (
-                            <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-200/60 text-slate-400 font-normal">
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200/60 text-slate-400 font-normal shrink-0">
                               {totalDocs > 0 ? 'Wird verarbeitet…' : '0 Dok.'}
                             </span>
                           )}
-                          {isSelectable && isSelected && <span className="text-slate-300">✓</span>}
+                          {isSelectable && isSelected && <span className="text-slate-300 shrink-0">✓</span>}
                         </button>
                       );
                     })}
@@ -709,13 +709,13 @@ export function LearnPage() {
                   <BarChart2 className="w-4 h-4 text-slate-400" />
                   <span>3. Schwierigkeit</span>
                 </label>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   {(['leicht', 'mittel', 'schwer'] as LearningDifficulty[]).map((d) => (
                     <button
                       key={d}
                       onClick={() => setDifficulty(d)}
                       className={cn(
-                        'px-3.5 py-1.5 rounded-lg text-xs font-medium capitalize border transition-all cursor-pointer',
+                        'flex-1 sm:flex-initial text-center justify-center px-3.5 py-1.5 rounded-lg text-xs font-medium capitalize border transition-all cursor-pointer',
                         difficulty === d
                           ? 'bg-blue-50 border-blue-300 text-blue-700 font-semibold'
                           : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50',
@@ -812,7 +812,7 @@ export function LearnPage() {
                     (tId) => (topicDocumentCounts.get(tId)?.completed ?? 0) === 0,
                   )
                 }
-                className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl shadow-xs transition-colors cursor-pointer"
+                className="inline-flex items-center justify-center w-full sm:w-auto gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl shadow-xs transition-colors cursor-pointer"
               >
                 <span>
                   Lernsession starten ({SESSION_QUESTION_LIMIT}{' '}
@@ -827,7 +827,7 @@ export function LearnPage() {
 
       {/* Loading state during retrieval & generation */}
       {isGenerating && (
-        <div className="bg-white border border-slate-200 rounded-xl p-8 text-center space-y-3">
+        <div className="bg-white border border-slate-200 rounded-xl p-6 sm:p-8 text-center space-y-3">
           <Loader2 className="w-8 h-8 text-blue-600 animate-spin mx-auto" />
           <h3 className="text-base font-semibold text-slate-900">
             Quellenbasiertes Lernen wird vorbereitet
@@ -838,7 +838,7 @@ export function LearnPage() {
 
       {/* Session Completed Summary Screen */}
       {isSessionComplete && (quizSummary || flashcardSummary || fillBlankSummary) && !isGenerating && (
-        <div className="bg-white border border-slate-200 rounded-xl p-8 shadow-2xs space-y-6">
+        <div className="bg-white border border-slate-200 rounded-xl p-5 sm:p-8 shadow-2xs space-y-6">
           <div className="text-center space-y-2">
             <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center mx-auto mb-2">
               {selectedMode === 'flashcards' ? (
@@ -847,7 +847,7 @@ export function LearnPage() {
                 <Trophy className="w-6 h-6" />
               )}
             </div>
-            <h2 className="text-xl font-bold text-slate-900">
+            <h2 className="text-lg sm:text-xl font-bold text-slate-900">
               {selectedMode === 'flashcards'
                 ? 'Karteikarten-Session abgeschlossen!'
                 : selectedMode === 'fill-in-the-blank'
@@ -863,7 +863,7 @@ export function LearnPage() {
             </p>
           </div>
 
-          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-3">
+          <div className="p-3.5 sm:p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-3">
             <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
               {selectedMode === 'flashcards' ? 'Bearbeitete Themen' : 'Ergebnis nach Themen'}
             </h3>
@@ -872,10 +872,10 @@ export function LearnPage() {
                 ? flashcardSummary.byTopic.map((item) => (
                     <div
                       key={item.topicId}
-                      className="flex items-center justify-between p-3 rounded-lg bg-white border border-slate-200/70 text-sm"
+                      className="flex items-center justify-between p-3 rounded-lg bg-white border border-slate-200/70 text-sm gap-2"
                     >
-                      <span className="font-medium text-slate-800">{item.topicName}</span>
-                      <span className="text-xs font-semibold text-slate-600">
+                      <span className="font-medium text-slate-800 truncate">{item.topicName}</span>
+                      <span className="text-xs font-semibold text-slate-600 shrink-0">
                         {item.total} {item.total === 1 ? 'Karte' : 'Karten'}
                       </span>
                     </div>
@@ -883,10 +883,10 @@ export function LearnPage() {
                 : (fillBlankSummary || quizSummary)?.byTopic.map((item) => (
                     <div
                       key={item.topicId}
-                      className="flex items-center justify-between p-3 rounded-lg bg-white border border-slate-200/70 text-sm"
+                      className="flex items-center justify-between p-3 rounded-lg bg-white border border-slate-200/70 text-sm gap-2"
                     >
-                      <span className="font-medium text-slate-800">{item.topicName}</span>
-                      <div className="flex items-center gap-2">
+                      <span className="font-medium text-slate-800 truncate">{item.topicName}</span>
+                      <div className="flex items-center gap-2 shrink-0">
                         <span className="text-xs font-semibold text-slate-600">
                           {item.correct} / {item.total} richtig
                         </span>
@@ -908,7 +908,7 @@ export function LearnPage() {
             </div>
           </div>
 
-          <div className="flex justify-center gap-3 pt-2">
+          <div className="flex flex-wrap justify-center gap-3 pt-2">
             <button
               onClick={handleStartSession}
               className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg shadow-xs transition-colors cursor-pointer"
@@ -929,8 +929,8 @@ export function LearnPage() {
       {/* Active Task UI (Quiz or Flashcard) */}
       {currentTask && !isGenerating && !isSessionComplete && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
                 {selectedMode === 'flashcards'
                   ? 'Karte'
@@ -940,7 +940,7 @@ export function LearnPage() {
                 {currentQuestionNumber} von {SESSION_QUESTION_LIMIT}
               </span>
               {currentTopicName && (
-                <span className="text-[11px] font-medium bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
+                <span className="text-[11px] font-medium bg-slate-100 text-slate-700 px-2 py-0.5 rounded truncate max-w-[160px] sm:max-w-none">
                   {currentTopicName}
                 </span>
               )}
@@ -960,10 +960,10 @@ export function LearnPage() {
 
           {/* Quiz Task View */}
           {selectedMode === 'quiz' && 'options' in currentTask && (
-            <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-2xs space-y-6">
+            <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-6 shadow-2xs space-y-6">
               {/* Question */}
               <div className="space-y-2">
-                <h2 className="text-lg font-semibold text-slate-900 leading-snug">
+                <h2 className="text-base sm:text-lg font-semibold text-slate-900 leading-snug">
                   {currentTask.question}
                 </h2>
               </div>
@@ -993,12 +993,12 @@ export function LearnPage() {
                       disabled={isAnswerRevealed}
                       onClick={() => handleSelectAnswerOption(option)}
                       className={cn(
-                        'w-full p-4 rounded-xl border text-left text-sm transition-all cursor-pointer flex items-center justify-between',
+                        'w-full p-3.5 sm:p-4 rounded-xl border text-left text-sm transition-all cursor-pointer flex items-center justify-between gap-2.5',
                         optionStyle,
                         isAnswerRevealed && 'cursor-default',
                       )}
                     >
-                      <span>{option}</span>
+                      <span className="min-w-0 flex-1 break-words">{option}</span>
                       {isAnswerRevealed && isCorrect && (
                         <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 ml-2" />
                       )}
@@ -1048,7 +1048,7 @@ export function LearnPage() {
           {/* Flashcard Task View with 3D Flip & Layout Stability */}
           {selectedMode === 'flashcards' && currentTask.mode === 'flashcards' && (
             <div className="w-full max-w-2xl mx-auto">
-              <div className="relative w-full h-[400px] sm:h-[420px] perspective-1000">
+              <div className="relative w-full min-h-[380px] h-[380px] sm:h-[420px] perspective-1000">
                 <div
                   className={cn(
                     'relative w-full h-full preserve-3d transition-transform duration-500 ease-in-out',
@@ -1056,7 +1056,7 @@ export function LearnPage() {
                   )}
                 >
                   {/* Front Card Face (Question) */}
-                  <div className="absolute inset-0 w-full h-full backface-hidden bg-white border border-slate-200/90 rounded-2xl shadow-sm p-6 sm:p-8 flex flex-col justify-between select-none">
+                  <div className="absolute inset-0 w-full h-full backface-hidden bg-white border border-slate-200/90 rounded-2xl shadow-sm p-4 sm:p-8 flex flex-col justify-between select-none">
                     <div className="flex items-center justify-between pb-3 border-b border-slate-100 shrink-0">
                       <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
                         Vorderseite · Frage
@@ -1070,7 +1070,7 @@ export function LearnPage() {
                       onClick={handleFlipFlashcard}
                       className="flex-1 flex items-center justify-center text-center px-2 sm:px-6 cursor-pointer overflow-y-auto"
                     >
-                      <h2 className="text-xl sm:text-2xl font-semibold text-slate-900 leading-snug">
+                      <h2 className="text-lg sm:text-2xl font-semibold text-slate-900 leading-snug">
                         {currentTask.question}
                       </h2>
                     </div>
@@ -1088,7 +1088,7 @@ export function LearnPage() {
                   </div>
 
                   {/* Back Card Face (Answer + Evidence) */}
-                  <div className="absolute inset-0 w-full h-full backface-hidden rotate-y-180 bg-white border border-slate-200/90 rounded-2xl shadow-sm p-6 sm:p-8 flex flex-col justify-between">
+                  <div className="absolute inset-0 w-full h-full backface-hidden rotate-y-180 bg-white border border-slate-200/90 rounded-2xl shadow-sm p-4 sm:p-8 flex flex-col justify-between">
                     <div className="flex items-center justify-between pb-3 border-b border-slate-100 shrink-0">
                       <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
                         Rückseite · Antwort
@@ -1119,7 +1119,7 @@ export function LearnPage() {
                             <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
                               Antwort
                             </div>
-                            <p className="text-base sm:text-lg font-semibold text-slate-900 leading-relaxed">
+                            <p className="text-sm sm:text-lg font-semibold text-slate-900 leading-relaxed">
                               {currentTask.answer}
                             </p>
                           </div>
@@ -1136,7 +1136,7 @@ export function LearnPage() {
                       )}
                     </div>
 
-                    <div className="pt-3 border-t border-slate-100 flex items-center justify-between shrink-0">
+                    <div className="pt-3 border-t border-slate-100 flex items-center justify-between shrink-0 gap-2">
                       <button
                         type="button"
                         onClick={handleFlipFlashcard}
@@ -1167,7 +1167,7 @@ export function LearnPage() {
 
           {/* Lückentext (Fill-in-the-blank) Task View */}
           {selectedMode === 'fill-in-the-blank' && currentTask.mode === 'fill-in-the-blank' && (
-            <div className="w-full max-w-2xl mx-auto bg-white border border-slate-200/90 rounded-2xl p-6 sm:p-8 shadow-xs space-y-6">
+            <div className="w-full max-w-2xl mx-auto bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-8 shadow-xs space-y-6">
               <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                 <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
                   Lückentext · Vervollständige den Satz
@@ -1179,7 +1179,7 @@ export function LearnPage() {
 
               {/* Sentence Display with Blank */}
               <div className="space-y-4">
-                <div className="p-4 sm:p-5 bg-slate-50/80 rounded-xl border border-slate-200/70 leading-relaxed text-base sm:text-lg text-slate-800">
+                <div className="p-4 sm:p-5 bg-slate-50/80 rounded-xl border border-slate-200/70 leading-relaxed text-sm sm:text-lg text-slate-800 break-words">
                   {(() => {
                     const parts = currentTask.sentenceWithBlank.split(BLANK_MARKER);
                     if (parts.length < 2) {
@@ -1189,7 +1189,7 @@ export function LearnPage() {
                       <span>
                         {parts[0]}
                         {!isAnswerRevealed ? (
-                          <span className="inline-block border-b-2 border-blue-500 min-w-[100px] text-center font-semibold text-blue-600 px-2 py-0.5 mx-1 bg-blue-50/60 rounded">
+                          <span className="inline-block border-b-2 border-blue-500 min-w-[80px] sm:min-w-[100px] text-center font-semibold text-blue-600 px-2 py-0.5 mx-1 bg-blue-50/60 rounded">
                             {fillBlankInput.trim() ? fillBlankInput : '_____'}
                           </span>
                         ) : (
@@ -1296,7 +1296,7 @@ export function LearnPage() {
 
           {/* Sources Grounding Block (Mandatory) */}
           <div className={cn(
-            'bg-white border border-slate-200 rounded-xl p-5 shadow-2xs space-y-3',
+            'bg-white border border-slate-200 rounded-xl p-4 sm:p-5 shadow-2xs space-y-3',
             (selectedMode === 'flashcards' || selectedMode === 'fill-in-the-blank') && 'max-w-2xl mx-auto w-full',
           )}>
             <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
@@ -1313,7 +1313,7 @@ export function LearnPage() {
                     return (
                       <div
                         key={src.id}
-                        className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-xs"
+                        className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-xs gap-1.5 sm:gap-2"
                       >
                         <div className="flex items-center gap-2 min-w-0">
                           <FileText className="w-4 h-4 text-blue-600 shrink-0" />
@@ -1326,7 +1326,7 @@ export function LearnPage() {
                             </span>
                           )}
                         </div>
-                        <span className="text-[10px] font-semibold text-blue-700 bg-blue-100/60 px-2 py-0.5 rounded shrink-0">
+                        <span className="text-[10px] font-semibold text-blue-700 bg-blue-100/60 px-2 py-0.5 rounded shrink-0 self-start sm:self-auto">
                           Meine Unterlagen
                         </span>
                       </div>
@@ -1336,7 +1336,7 @@ export function LearnPage() {
                   return (
                     <div
                       key={src.id}
-                      className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-xs"
+                      className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-xs gap-1.5 sm:gap-2"
                     >
                       <div className="flex items-center gap-2 min-w-0">
                         <Globe className="w-4 h-4 text-emerald-600 shrink-0" />
@@ -1349,7 +1349,7 @@ export function LearnPage() {
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-2 shrink-0">
+                      <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
                         {src.url && (
                           <a
                             href={src.url}

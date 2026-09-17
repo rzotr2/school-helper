@@ -126,18 +126,18 @@ export function SubjectPage() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
-      <div className="flex items-center justify-between border-b border-slate-200 pb-6">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 pb-5 gap-4">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center shrink-0">
             <Book className="w-5 h-5" />
           </div>
-          <h1 className="text-2xl font-semibold text-slate-900">{subject.name}</h1>
+          <h1 className="text-xl sm:text-2xl font-semibold text-slate-900 truncate">{subject.name}</h1>
         </div>
         
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
           <Button variant="secondary" onClick={() => setIsEditDialogOpen(true)} className="gap-2">
             <Edit2 className="w-4 h-4" />
-            <span className="hidden sm:inline">Umbenennen</span>
+            <span>Umbenennen</span>
           </Button>
           <Button variant="ghost" onClick={() => setIsDeleteDialogOpen(true)} aria-label="Fach löschen" className="text-red-600 hover:text-red-700 hover:bg-red-50 px-3">
             <Trash2 className="w-4 h-4" />
@@ -146,16 +146,16 @@ export function SubjectPage() {
       </div>
 
       <div>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-medium text-slate-900">Themen</h2>
-          <Button onClick={() => setIsAddTopicDialogOpen(true)} className="gap-2">
+        <div className="flex items-center justify-between mb-4 gap-2">
+          <h2 className="text-base sm:text-lg font-medium text-slate-900">Themen</h2>
+          <Button onClick={() => setIsAddTopicDialogOpen(true)} className="gap-2 shrink-0">
             <Plus className="w-4 h-4" />
-            Thema erstellen
+            <span>Thema erstellen</span>
           </Button>
         </div>
 
         {topics.length === 0 ? (
-          <div className="border-2 border-dashed border-slate-200 rounded-xl p-12 flex flex-col items-center justify-center text-center bg-white/50">
+          <div className="border-2 border-dashed border-slate-200 rounded-xl p-8 sm:p-12 flex flex-col items-center justify-center text-center bg-white/50">
             <h3 className="text-sm font-medium text-slate-900 mb-1">Noch keine Themen</h3>
             <p className="text-sm text-slate-500 max-w-sm mb-4">
               Erstelle ein Thema, um deine Unterlagen später zu organisieren.
@@ -169,28 +169,28 @@ export function SubjectPage() {
             {topics.map((topic) => (
               <div 
                 key={topic.id}
-                className="group flex items-center justify-between p-4 bg-white border border-slate-200 rounded-lg shadow-sm hover:border-slate-300 hover:shadow-md transition-all"
+                className="group flex items-center justify-between p-3.5 sm:p-4 bg-white border border-slate-200 rounded-lg shadow-sm hover:border-slate-300 hover:shadow-md transition-all gap-2"
               >
                 <Link 
                   to={`/subject/${subject.id}/topic/${topic.id}`} 
                   className="flex items-center gap-3 flex-1 min-w-0"
                 >
                   <Folder className="w-5 h-5 text-blue-500 shrink-0" />
-                  <span className="font-medium text-slate-900 truncate">{topic.name}</span>
+                  <span className="font-medium text-slate-900 truncate text-sm sm:text-base">{topic.name}</span>
                 </Link>
                 
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100 transition-opacity">
+                <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100 transition-opacity shrink-0">
                   <button
                     onClick={() => setEditingTopic(topic)}
                     aria-label={`Thema "${topic.name}" umbenennen`}
-                    className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                    className="p-1.5 sm:p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 cursor-pointer"
                   >
                     <Edit2 className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => setDeletingTopic(topic)}
                     aria-label={`Thema "${topic.name}" löschen`}
-                    className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                    className="p-1.5 sm:p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 cursor-pointer"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>

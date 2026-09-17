@@ -1,10 +1,14 @@
 import React from 'react';
-import { BookOpen, LogOut, GraduationCap } from 'lucide-react';
+import { BookOpen, LogOut, GraduationCap, Menu } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../infrastructure/auth/AuthContext';
 import { cn } from '../../shared/utils/cn';
 
-export function Header() {
+interface HeaderProps {
+  onOpenMobileMenu?: () => void;
+}
+
+export function Header({ onOpenMobileMenu }: HeaderProps) {
   const { user, logOut } = useAuth();
   const location = useLocation();
   const isLearnActive = location.pathname.startsWith('/learn');
@@ -15,11 +19,25 @@ export function Header() {
   const initials = name.substring(0, 2).toUpperCase();
 
   return (
-    <header className="h-14 bg-white border-b border-slate-200 flex items-center px-4 justify-between shrink-0">
-      <div className="flex items-center gap-2">
-        <Link to="/" className="flex items-center gap-2 text-slate-900 hover:opacity-90 transition-opacity">
-          <BookOpen className="w-5 h-5 text-blue-600" />
-          <span className="font-semibold text-sm">Meine Schule</span>
+    <header className="h-14 bg-white border-b border-slate-200 flex items-center px-3 sm:px-4 justify-between shrink-0">
+      <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+        {onOpenMobileMenu && (
+          <button
+            type="button"
+            onClick={onOpenMobileMenu}
+            className="md:hidden p-1.5 -ml-0.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-md transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+            title="Navigation öffnen"
+            aria-label="Navigation öffnen"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+        )}
+        <Link
+          to="/"
+          className="hidden sm:flex items-center gap-2 text-slate-900 hover:opacity-90 transition-opacity shrink-0"
+        >
+          <BookOpen className="w-5 h-5 text-blue-600 shrink-0" />
+          <span className="font-semibold text-sm whitespace-nowrap">Meine Schule</span>
         </Link>
       </div>
       <div className="flex items-center gap-3">

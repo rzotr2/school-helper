@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Folder, FileText, Plus, Loader2, GraduationCap } from 'lucide-react';
-import { NavLink } from 'react-router-dom';
+import { Folder, FileText, Plus, Loader2, GraduationCap, X, BookOpen } from 'lucide-react';
+import { NavLink, useLocation, Link } from 'react-router-dom';
 import { cn } from '../../shared/utils/cn';
 import { useAuth } from '../../infrastructure/auth/AuthContext';
 import {
@@ -13,11 +13,17 @@ import {
 import { getSchoolProfile, createSchoolProfile } from '../../application/use-cases/schoolProfile';
 import { NameDialog } from './NameDialog';
 
-export function Sidebar() {
+interface SidebarProps {
+  isMobileOpen?: boolean;
+  onMobileClose?: () => void;
+}
+
+export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
   const { user, isLoading: isAuthLoading } = useAuth();
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const location = useLocation();
 
   const loadData = async () => {
     if (!user || isAuthLoading) return;
@@ -54,6 +60,25 @@ export function Sidebar() {
     };
   }, [user, isAuthLoading]);
 
+  // Close mobile drawer on route change
+  useEffect(() => {
+    if (isMobileOpen && onMobileClose) {
+      onMobileClose();
+    }
+  }, [location.pathname]);
+
+  // Close mobile drawer on Escape key
+  useEffect(() => {
+    if (!isMobileOpen || !onMobileClose) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onMobileClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isMobileOpen, onMobileClose]);
+
   const handleAddSubject = async (name: string) => {
     if (!user) return;
     const position = subjects.length > 0 ? subjects[subjects.length - 1].position + 1 : 0;
@@ -62,85 +87,135 @@ export function Sidebar() {
     await loadData();
   };
 
-  return (
-    <aside className="w-64 bg-white border-r border-slate-200 flex flex-col shrink-0">
-      <div className="p-4 flex-1 overflow-y-auto">
-        <div className="mb-6">
-          <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 px-2">
-            Meine Schule
-          </h3>
-          <nav className="space-y-0.5">
-            <NavLink
-              to="/"
-              end
-              className={({ isActive }) =>
-                cn(
-                  "flex items-center gap-2 px-2 py-1.5 text-sm rounded-md transition-colors",
-                  isActive ? "bg-blue-50 text-blue-700 font-medium" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                )
-              }
-            >
-              <FileText className="w-4 h-4" />
-              Alle Dateien
-            </NavLink>
-            <NavLink
-              to="/learn"
-              className={({ isActive }) =>
-                cn(
-                  "flex items-center gap-2 px-2 py-1.5 text-sm rounded-md transition-colors",
-                  isActive ? "bg-blue-50 text-blue-700 font-medium" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                )
-              }
-            >
-              <GraduationCap className="w-4 h-4" />
-              Lernen
-            </NavLink>
-          </nav>
-        </div>
+  const handleLinkClick = () => {
+    if (isMobileOpen && onMobileClose) {
+      onMobileClose();
+    }
+  };
 
-        <div>
-          <div className="flex items-center justify-between mb-2 px-2">
-            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              Fächer
-            </h3>
-            <button
-              onClick={() => setIsAddDialogOpen(true)}
-              className="text-slate-400 hover:text-slate-600 transition-colors cursor-pointer p-1 rounded hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
-              title="Fach hinzufügen"
-              aria-label="Fach hinzufügen"
-            >
-              <Plus className="w-4 h-4" />
-            </button>
-          </div>
-          <nav className="space-y-0.5">
-            {(isLoading || isAuthLoading) ? (
-              <div className="flex items-center justify-center py-4 text-slate-400">
-                <Loader2 className="w-4 h-4 animate-spin" />
-              </div>
-            ) : subjects.length === 0 ? (
-              <div className="px-2 py-2 text-sm text-slate-400 italic">
-                Noch keine Fächer
-              </div>
-            ) : (
-              subjects.map((subject) => (
-                <NavLink
-                  key={subject.id}
-                  to={`/subject/${subject.id}`}
-                  className={({ isActive }) =>
-                    cn(
-                      "flex items-center gap-2 px-2 py-1.5 text-sm rounded-md transition-colors",
-                      isActive ? "bg-blue-50 text-blue-700 font-medium" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                    )
-                  }
-                >
-                  <Folder className="w-4 h-4" />
-                  <span className="truncate">{subject.name}</span>
-                </NavLink>
-              ))
-            )}
-          </nav>
-        </div>
+  const renderNavContent = () => (
+    <div className="p-4 flex-1 overflow-y-auto">
+      <div className="mb-6">
+        <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 px-2">
+          Meine Schule
+        </h3>
+        <nav className="space-y-0.5">
+          <NavLink
+            to="/"
+            end
+            onClick={handleLinkClick}
+            className={({ isActive }) =>
+              cn(
+                "flex items-center gap-2 px-2 py-1.5 text-sm rounded-md transition-colors",
+                isActive ? "bg-blue-50 text-blue-700 font-medium" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+              )
+            }
+          >
+            <FileText className="w-4 h-4 shrink-0" />
+            <span>Alle Dateien</span>
+          </NavLink>
+          <NavLink
+            to="/learn"
+            onClick={handleLinkClick}
+            className={({ isActive }) =>
+              cn(
+                "flex items-center gap-2 px-2 py-1.5 text-sm rounded-md transition-colors",
+                isActive ? "bg-blue-50 text-blue-700 font-medium" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+              )
+            }
+          >
+            <GraduationCap className="w-4 h-4 shrink-0" />
+            <span>Lernen</span>
+          </NavLink>
+        </nav>
       </div>
+
+      <div>
+        <div className="flex items-center justify-between mb-2 px-2">
+          <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+            Fächer
+          </h3>
+          <button
+            onClick={() => setIsAddDialogOpen(true)}
+            className="text-slate-400 hover:text-slate-600 transition-colors cursor-pointer p-1 rounded hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+            title="Fach hinzufügen"
+            aria-label="Fach hinzufügen"
+          >
+            <Plus className="w-4 h-4" />
+          </button>
+        </div>
+        <nav className="space-y-0.5">
+          {(isLoading || isAuthLoading) ? (
+            <div className="flex items-center justify-center py-4 text-slate-400">
+              <Loader2 className="w-4 h-4 animate-spin" />
+            </div>
+          ) : subjects.length === 0 ? (
+            <div className="px-2 py-2 text-sm text-slate-400 italic">
+              Noch keine Fächer
+            </div>
+          ) : (
+            subjects.map((subject) => (
+              <NavLink
+                key={subject.id}
+                to={`/subject/${subject.id}`}
+                onClick={handleLinkClick}
+                className={({ isActive }) =>
+                  cn(
+                    "flex items-center gap-2 px-2 py-1.5 text-sm rounded-md transition-colors",
+                    isActive ? "bg-blue-50 text-blue-700 font-medium" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                  )
+                }
+              >
+                <Folder className="w-4 h-4 shrink-0 text-slate-400" />
+                <span className="truncate">{subject.name}</span>
+              </NavLink>
+            ))
+          )}
+        </nav>
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      {/* Desktop Sidebar: stays unchanged on md screens and up */}
+      <aside className="hidden md:flex md:w-64 bg-white border-r border-slate-200 flex-col shrink-0">
+        {renderNavContent()}
+      </aside>
+
+      {/* Mobile Drawer: visible on < md when toggled */}
+      {isMobileOpen && (
+        <div className="fixed inset-0 z-50 md:hidden flex" role="dialog" aria-modal="true" aria-label="Mobile Navigation">
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs animate-backdrop-fade"
+            onClick={onMobileClose}
+            aria-hidden="true"
+          />
+          {/* Drawer content */}
+          <aside className="relative w-72 max-w-[80vw] h-full bg-white flex flex-col shadow-2xl border-r border-slate-200 z-10 animate-drawer-slide">
+            <div className="flex items-center justify-between px-4 h-14 border-b border-slate-200 shrink-0">
+              <Link
+                to="/"
+                onClick={handleLinkClick}
+                className="flex items-center gap-2 text-slate-900 hover:opacity-90 transition-opacity"
+              >
+                <BookOpen className="w-5 h-5 text-blue-600 shrink-0" />
+                <span className="font-semibold text-sm whitespace-nowrap">Meine Schule</span>
+              </Link>
+              <button
+                type="button"
+                onClick={onMobileClose}
+                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                aria-label="Navigation schließen"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            {renderNavContent()}
+          </aside>
+        </div>
+      )}
 
       <NameDialog
         isOpen={isAddDialogOpen}
@@ -149,6 +224,6 @@ export function Sidebar() {
         title="Neues Fach"
         submitLabel="Fach hinzufügen"
       />
-    </aside>
+    </>
   );
 }

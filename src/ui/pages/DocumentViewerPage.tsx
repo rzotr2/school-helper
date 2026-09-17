@@ -343,8 +343,11 @@ export function DocumentViewerPage() {
 
   if (session !== null) {
     return (
-      // Fills the space below the header and the main padding (h-14 + p-8).
-      <div className="h-[calc(100vh-5.5rem)]">
+      // Fills the space below the header and main padding:
+      // Mobile: h-14 header (3.5rem) + p-4 top/bottom (2rem) = 5.5rem.
+      // Tablet: p-6 top/bottom (3rem) = 6.5rem.
+      // Desktop: p-8 top/bottom (4rem) = 7.5rem.
+      <div className="h-[calc(100vh-5.5rem)] sm:h-[calc(100vh-6.5rem)] md:h-[calc(100vh-7.5rem)]">
         <PdfViewer
           pdfDocument={session.loaded.doc}
           inspection={session.inspection}

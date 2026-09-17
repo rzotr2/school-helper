@@ -201,22 +201,22 @@ export function TopicPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-2 text-sm text-slate-500 mb-2">
+      <div className="flex items-center gap-2 text-sm text-slate-500 mb-2 flex-wrap min-w-0">
         <Link 
           to={`/subject/${subject.id}`} 
-          className="hover:text-slate-900 hover:underline transition-colors"
+          className="hover:text-slate-900 hover:underline transition-colors truncate max-w-[150px] sm:max-w-xs"
         >
           {subject.name}
         </Link>
-        <ChevronRight className="w-4 h-4" />
-        <span className="text-slate-900 font-medium">{topic.name}</span>
+        <ChevronRight className="w-4 h-4 shrink-0" />
+        <span className="text-slate-900 font-medium truncate max-w-[150px] sm:max-w-xs">{topic.name}</span>
       </div>
 
-      <div className="flex items-center gap-3 border-b border-slate-200 pb-6">
-        <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center">
+      <div className="flex items-center gap-3 border-b border-slate-200 pb-5 min-w-0">
+        <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center shrink-0">
           <Folder className="w-5 h-5" />
         </div>
-        <h1 className="text-2xl font-semibold text-slate-900">{topic.name}</h1>
+        <h1 className="text-xl sm:text-2xl font-semibold text-slate-900 truncate">{topic.name}</h1>
       </div>
 
       {uploadError && (
@@ -226,14 +226,14 @@ export function TopicPage() {
       )}
 
       {actionError && (
-        <div className="flex items-center justify-between p-3.5 bg-red-50 text-red-700 rounded-lg text-sm mb-4 border border-red-200">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between p-3.5 bg-red-50 text-red-700 rounded-lg text-sm mb-4 border border-red-200 gap-2">
+          <div className="flex items-center gap-2 min-w-0">
             <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
-            <span>{actionError}</span>
+            <span className="truncate">{actionError}</span>
           </div>
           <button
             onClick={() => setActionError(null)}
-            className="p-1 hover:bg-red-100 rounded text-red-700 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+            className="p-1 hover:bg-red-100 rounded text-red-700 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 shrink-0"
             title="Schließen"
             aria-label="Schließen"
           >
@@ -242,9 +242,9 @@ export function TopicPage() {
         </div>
       )}
 
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-medium text-slate-900">Dokumente</h2>
-        <div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-3">
+        <h2 className="text-base sm:text-lg font-medium text-slate-900">Dokumente</h2>
+        <div className="w-full sm:w-auto">
           <input
             ref={fileInputRef}
             type="file"
@@ -255,7 +255,7 @@ export function TopicPage() {
           />
           <Button
             variant="primary"
-            className="gap-2"
+            className="w-full sm:w-auto gap-2"
             disabled={isUploading}
             onClick={() => fileInputRef.current?.click()}
           >
@@ -264,7 +264,7 @@ export function TopicPage() {
             ) : (
               <Upload className="w-4 h-4" />
             )}
-            {isUploading ? `Wird hochgeladen (${uploadProgress}%)` : 'Dokument hochladen'}
+            <span>{isUploading ? `Wird hochgeladen (${uploadProgress}%)` : 'Dokument hochladen'}</span>
           </Button>
         </div>
       </div>
@@ -293,22 +293,22 @@ export function TopicPage() {
             return (
               <div
                 key={doc.id}
-                className="group flex items-center justify-between p-4 bg-white border border-slate-200 rounded-lg shadow-sm hover:border-slate-300 transition-all"
+                className="group flex flex-col sm:flex-row sm:items-center justify-between p-3.5 sm:p-4 bg-white border border-slate-200 rounded-lg shadow-sm hover:border-slate-300 transition-all gap-3 w-full min-w-0 max-w-full overflow-hidden"
               >
                 <button
                   onClick={() => isOpenable && handleOpenDocument(doc.id)}
                   disabled={!isOpenable}
                   className={cn(
-                    "flex items-center gap-3 flex-1 min-w-0 text-left transition-colors",
+                    "flex items-start sm:items-center gap-3 flex-1 min-w-0 w-full max-w-full text-left transition-colors overflow-hidden",
                     isOpenable ? "hover:text-blue-600 cursor-pointer" : "cursor-default"
                   )}
                 >
-                  <div className="w-8 h-8 rounded bg-red-50 text-red-600 flex items-center justify-center shrink-0">
+                  <div className="w-8 h-8 rounded bg-red-50 text-red-600 flex items-center justify-center shrink-0 mt-0.5 sm:mt-0">
                     <FileText className="w-4 h-4" />
                   </div>
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1 max-w-full overflow-hidden">
                     <p className={cn(
-                      "font-medium text-slate-900 truncate transition-colors",
+                      "font-medium text-slate-900 truncate transition-colors text-sm sm:text-base",
                       isOpenable && "group-hover:text-blue-600"
                     )}>
                       {doc.originalName}
@@ -329,12 +329,12 @@ export function TopicPage() {
                           {formatFileSize(doc.size)} &middot; {formatDate(doc.createdAt)}
                         </p>
                         {doc.understanding && (
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-200/60">
+                          <div className="flex flex-wrap items-center gap-1.5 min-w-0 max-w-full">
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-200/60 shrink-0">
                               {DOCUMENT_TYPE_LABELS[doc.understanding.documentType] ?? 'Dokument'}
                             </span>
                             {doc.understanding.title && (
-                              <span className="text-[11px] text-slate-600 font-medium truncate max-w-[200px]">
+                              <span className="text-[11px] text-slate-600 font-medium truncate max-w-[200px] sm:max-w-xs">
                                 {doc.understanding.title}
                               </span>
                             )}
@@ -358,11 +358,11 @@ export function TopicPage() {
                   </div>
                 </button>
 
-                <div className="flex items-center gap-1.5 ml-4 shrink-0">
+                <div className="flex flex-wrap items-center justify-end gap-1 pt-2 sm:pt-0 border-t border-slate-100 sm:border-t-0 sm:ml-4 shrink-0 w-full sm:w-auto min-w-0">
                   {isOpenable && (
                     <button
                       onClick={() => setInspectingDoc(doc)}
-                      className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                      className="p-1.5 sm:p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
                       title="Dokument-Übersicht & Analyse"
                       aria-label="Dokument-Übersicht & Analyse"
                     >
@@ -373,7 +373,7 @@ export function TopicPage() {
                     <button
                       onClick={() => void startProcessing(doc.id)}
                       disabled={isProcessing}
-                      className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors disabled:opacity-50 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                      className="p-1.5 sm:p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors disabled:opacity-50 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
                       title="Verarbeitung wiederholen"
                       aria-label="Verarbeitung wiederholen"
                     >
@@ -383,7 +383,7 @@ export function TopicPage() {
                   <button
                     onClick={() => isOpenable && handleOpenDocument(doc.id)}
                     disabled={!isOpenable}
-                    className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors disabled:opacity-50 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                    className="p-1.5 sm:p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors disabled:opacity-50 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
                     title="Öffnen"
                     aria-label="Öffnen"
                   >
@@ -391,7 +391,7 @@ export function TopicPage() {
                   </button>
                   <button
                     onClick={() => setRenamingDoc(doc)}
-                    className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                    className="p-1.5 sm:p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
                     title="Umbenennen"
                     aria-label="Umbenennen"
                   >
@@ -399,7 +399,7 @@ export function TopicPage() {
                   </button>
                   <button
                     onClick={() => setMovingDoc(doc)}
-                    className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                    className="p-1.5 sm:p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
                     title="Verschieben"
                     aria-label="Verschieben"
                   >
@@ -408,7 +408,7 @@ export function TopicPage() {
                   <button
                     onClick={() => setDocToDelete(doc)}
                     disabled={deletingDocId === doc.id}
-                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors disabled:opacity-50 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                    className="p-1.5 sm:p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors disabled:opacity-50 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
                     title="Löschen"
                     aria-label="Löschen"
                   >

@@ -463,7 +463,7 @@ export function Home() {
             Übersicht aller hochgeladenen PDF-Unterlagen aus deinen Fächern und Themen.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full sm:w-auto">
           <input
             type="file"
             ref={globalFileInputRef}
@@ -474,7 +474,7 @@ export function Home() {
           <button
             onClick={() => globalFileInputRef.current?.click()}
             disabled={isGlobalUploading}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg shadow-xs transition-colors cursor-pointer disabled:opacity-50"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg shadow-xs transition-colors cursor-pointer disabled:opacity-50"
           >
             {isGlobalUploading ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -635,10 +635,10 @@ export function Home() {
         <>
           {/* Global Filter Bar */}
           {documents.length > 0 && (
-            <div className="flex flex-wrap items-center gap-3 bg-white p-3 border border-slate-200 rounded-lg shadow-2xs">
+            <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2.5 sm:gap-3 bg-white p-3 border border-slate-200 rounded-lg shadow-2xs">
               {/* Search by filename */}
-              <div className="relative flex-1 min-w-[200px]">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <div className="relative flex-1 min-w-0 sm:min-w-[180px]">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   type="text"
                   value={searchQuery}
@@ -649,7 +649,7 @@ export function Home() {
               </div>
 
               {/* Subject Filter */}
-              <div className="min-w-[150px]">
+              <div className="w-full sm:w-auto sm:min-w-[140px]">
                 <select
                   value={selectedSubjectId}
                   onChange={e => {
@@ -668,7 +668,7 @@ export function Home() {
               </div>
 
               {/* Topic Filter */}
-              <div className="min-w-[150px]">
+              <div className="w-full sm:w-auto sm:min-w-[140px]">
                 <select
                   value={selectedTopicId}
                   onChange={e => setSelectedTopicId(e.target.value)}
@@ -691,7 +691,7 @@ export function Home() {
               {(selectedSubjectId !== 'all' || selectedTopicId !== 'all' || searchQuery) && (
                 <button
                   onClick={handleResetFilters}
-                  className="px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-md transition-colors cursor-pointer"
+                  className="px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-md transition-colors cursor-pointer self-start sm:self-auto"
                 >
                   Filter zurücksetzen
                 </button>
@@ -737,22 +737,22 @@ export function Home() {
                 return (
                   <div
                     key={doc.id}
-                    className="group flex items-center justify-between p-4 bg-white border border-slate-200 rounded-lg shadow-2xs hover:border-slate-300 transition-all"
+                    className="group flex flex-col sm:flex-row sm:items-center justify-between p-3.5 sm:p-4 bg-white border border-slate-200 rounded-lg shadow-2xs hover:border-slate-300 transition-all gap-3 w-full min-w-0 max-w-full overflow-hidden"
                   >
                     <button
                       onClick={() => isOpenable && handleOpenDocument(doc.id)}
                       disabled={!isOpenable}
                       className={cn(
-                        "flex items-center gap-3.5 flex-1 min-w-0 text-left transition-colors",
+                        "flex items-start sm:items-center gap-3 flex-1 min-w-0 w-full max-w-full text-left transition-colors overflow-hidden",
                         isOpenable ? "hover:text-blue-600 cursor-pointer" : "cursor-default"
                       )}
                     >
-                      <div className="w-9 h-9 rounded-lg bg-red-50 text-red-600 flex items-center justify-center shrink-0">
+                      <div className="w-9 h-9 rounded-lg bg-red-50 text-red-600 flex items-center justify-center shrink-0 mt-0.5 sm:mt-0">
                         <FileText className="w-5 h-5" />
                       </div>
-                      <div className="min-w-0 flex-1">
+                      <div className="min-w-0 flex-1 max-w-full overflow-hidden">
                         <p className={cn(
-                          "font-medium text-slate-900 truncate transition-colors",
+                          "font-medium text-slate-900 truncate transition-colors text-sm sm:text-base",
                           isOpenable && "group-hover:text-blue-600"
                         )}>
                           {doc.originalName}
@@ -780,12 +780,12 @@ export function Home() {
                               {formatDate(doc.createdAt)}
                             </p>
                             {doc.understanding && (
-                              <div className="flex flex-wrap items-center gap-1.5">
-                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-200/60">
+                              <div className="flex flex-wrap items-center gap-1.5 min-w-0 max-w-full">
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-200/60 shrink-0">
                                   {DOCUMENT_TYPE_LABELS[doc.understanding.documentType] ?? 'Dokument'}
                                 </span>
                                 {doc.understanding.title && (
-                                  <span className="text-[11px] text-slate-600 font-medium truncate max-w-[200px]">
+                                  <span className="text-[11px] text-slate-600 font-medium truncate max-w-[200px] sm:max-w-xs">
                                     {doc.understanding.title}
                                   </span>
                                 )}
@@ -809,11 +809,11 @@ export function Home() {
                       </div>
                     </button>
 
-                    <div className="flex items-center gap-1.5 ml-4 shrink-0">
+                    <div className="flex flex-wrap items-center justify-end gap-1 pt-2 sm:pt-0 border-t border-slate-100 sm:border-t-0 sm:ml-4 shrink-0 w-full sm:w-auto min-w-0">
                       {isOpenable && (
                         <button
                           onClick={() => setInspectingDoc(doc)}
-                          className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                          className="p-1.5 sm:p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
                           title="Dokument-Übersicht & Analyse"
                           aria-label="Dokument-Übersicht & Analyse"
                         >
@@ -824,7 +824,7 @@ export function Home() {
                         <button
                           onClick={() => void startProcessing(doc.id)}
                           disabled={isProcessing}
-                          className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors disabled:opacity-50 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                          className="p-1.5 sm:p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors disabled:opacity-50 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
                           title="Verarbeitung wiederholen"
                           aria-label="Verarbeitung wiederholen"
                         >
@@ -834,7 +834,7 @@ export function Home() {
                       <button
                         onClick={() => isOpenable && handleOpenDocument(doc.id)}
                         disabled={!isOpenable}
-                        className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors disabled:opacity-50 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                        className="p-1.5 sm:p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors disabled:opacity-50 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
                         title="Öffnen"
                         aria-label="Öffnen"
                       >
@@ -842,7 +842,7 @@ export function Home() {
                       </button>
                       <button
                         onClick={() => setRenamingDoc(doc)}
-                        className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                        className="p-1.5 sm:p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
                         title="Umbenennen"
                         aria-label="Umbenennen"
                       >
@@ -850,7 +850,7 @@ export function Home() {
                       </button>
                       <button
                         onClick={() => setMovingDoc(doc)}
-                        className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                        className="p-1.5 sm:p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
                         title="Verschieben"
                         aria-label="Verschieben"
                       >
@@ -859,7 +859,7 @@ export function Home() {
                       <button
                         onClick={() => setDocToDelete(doc)}
                         disabled={deletingDocId === doc.id}
-                        className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors cursor-pointer disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                        className="p-1.5 sm:p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors cursor-pointer disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
                         title="Löschen"
                         aria-label="Löschen"
                       >

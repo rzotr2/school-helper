@@ -56,7 +56,7 @@ export function DocumentInfoModal({
   return (
     <div
       onClick={handleBackdropClick}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-150"
     >
       <div
         ref={modalRef}
@@ -66,13 +66,13 @@ export function DocumentInfoModal({
         aria-labelledby="document-info-title"
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 bg-slate-50/50">
-          <div className="flex items-center gap-2.5 min-w-0">
+        <div className="flex items-center justify-between px-4 sm:px-5 py-3 sm:py-4 border-b border-slate-200 bg-slate-50/50">
+          <div className="flex items-center gap-2.5 min-w-0 pr-2">
             <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
               <BookOpen className="w-4 h-4" />
             </div>
             <div className="min-w-0">
-              <h3 id="document-info-title" className="text-base font-semibold text-slate-900 truncate">
+              <h3 id="document-info-title" className="text-sm sm:text-base font-semibold text-slate-900 truncate">
                 Dokument-Übersicht
               </h3>
               <p className="text-xs text-slate-500 truncate">{documentName}</p>
@@ -81,7 +81,7 @@ export function DocumentInfoModal({
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md transition-colors cursor-pointer"
+            className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md transition-colors cursor-pointer shrink-0"
             aria-label="Schließen"
           >
             <X className="w-4 h-4" />
@@ -89,7 +89,7 @@ export function DocumentInfoModal({
         </div>
 
         {/* Content */}
-        <div className="p-5 overflow-y-auto space-y-5">
+        <div className="p-4 sm:p-5 overflow-y-auto space-y-5">
           {understanding ? (
             <>
               {/* Type and Subject badges */}

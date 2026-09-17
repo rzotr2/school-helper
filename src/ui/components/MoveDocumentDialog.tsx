@@ -112,7 +112,7 @@ export function MoveDocumentDialog({
 
         {error && <p className="text-sm text-red-600">{error}</p>}
 
-        <div className="flex justify-end gap-3 mt-4">
+        <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3 mt-4">
           <Button type="button" variant="ghost" onClick={onClose} disabled={isSubmitting}>
             Abbrechen
           </Button>

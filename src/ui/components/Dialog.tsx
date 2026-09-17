@@ -37,15 +37,15 @@ export function Dialog({ isOpen, onClose, title, children }: DialogProps) {
       ref={dialogRef}
       className={cn(
         "backdrop:bg-slate-900/50 backdrop:backdrop-blur-sm",
-        "bg-white rounded-xl shadow-xl border border-slate-200 p-0 m-auto w-full max-w-md",
+        "bg-white rounded-xl shadow-xl border border-slate-200 p-0 m-auto w-[calc(100%-2rem)] max-w-md max-h-[85vh] overflow-y-auto",
         "open:animate-in open:fade-in-0 open:zoom-in-95 open:duration-200"
       )}
     >
-      <div className="flex flex-col">
-        <div className="px-6 py-4 border-b border-slate-100">
-          <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
+      <div className="flex flex-col min-w-0">
+        <div className="px-5 sm:px-6 py-4 border-b border-slate-100">
+          <h2 className="text-base sm:text-lg font-semibold text-slate-900 truncate">{title}</h2>
         </div>
-        <div className="p-6">
+        <div className="p-5 sm:p-6">
           {children}
         </div>
       </div>

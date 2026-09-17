@@ -358,11 +358,11 @@ export function PdfViewer({
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white">
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-1 border-b border-slate-200 bg-white px-3 py-2">
+      <div className="flex flex-wrap items-center justify-between gap-1.5 border-b border-slate-200 bg-white px-2 sm:px-3 py-1.5 sm:py-2">
         <div className="flex items-center gap-1">
           <Button
             variant="ghost"
-            className="px-2"
+            className="px-1.5 sm:px-2"
             onClick={handlePrevPage}
             disabled={state.page <= 1}
             title="Vorherige Seite"
@@ -370,12 +370,12 @@ export function PdfViewer({
           >
             <ChevronLeft className="w-4 h-4" />
           </Button>
-          <span className="min-w-24 text-center text-sm tabular-nums text-slate-700">
+          <span className="min-w-20 sm:min-w-24 text-center text-xs sm:text-sm tabular-nums text-slate-700">
             Seite {state.page} von {state.totalPages}
           </span>
           <Button
             variant="ghost"
-            className="px-2"
+            className="px-1.5 sm:px-2"
             onClick={handleNextPage}
             disabled={state.page >= state.totalPages}
             title="Nächste Seite"
@@ -385,12 +385,12 @@ export function PdfViewer({
           </Button>
         </div>
 
-        <div className="mx-1 h-6 w-px bg-slate-200" />
+        <div className="hidden sm:block mx-1 h-6 w-px bg-slate-200" />
 
         <div className="flex items-center gap-1">
           <Button
             variant="ghost"
-            className="px-2"
+            className="px-1.5 sm:px-2"
             onClick={handleZoomOut}
             disabled={state.zoom <= VIEWER_ZOOM_MIN}
             title="Verkleinern"
@@ -398,12 +398,12 @@ export function PdfViewer({
           >
             <ZoomOut className="w-4 h-4" />
           </Button>
-          <span className="min-w-14 text-center text-sm tabular-nums text-slate-700">
+          <span className="min-w-10 sm:min-w-14 text-center text-xs sm:text-sm tabular-nums text-slate-700">
             {Math.round(state.zoom)}%
           </span>
           <Button
             variant="ghost"
-            className="px-2"
+            className="px-1.5 sm:px-2"
             onClick={handleZoomIn}
             disabled={state.zoom >= VIEWER_ZOOM_MAX}
             title="Vergrößern"
@@ -413,12 +413,12 @@ export function PdfViewer({
           </Button>
         </div>
 
-        <div className="mx-1 h-6 w-px bg-slate-200" />
+        <div className="hidden sm:block mx-1 h-6 w-px bg-slate-200" />
 
         <div className="flex items-center gap-1">
           <Button
             variant="ghost"
-            className="px-2"
+            className="px-1.5 sm:px-2"
             onClick={handleFitWidth}
             title="An Seitenbreite anpassen"
             aria-label="An Seitenbreite anpassen"
@@ -427,7 +427,7 @@ export function PdfViewer({
           </Button>
           <Button
             variant="ghost"
-            className="px-2"
+            className="px-1.5 sm:px-2"
             onClick={handleFitPage}
             title="Ganze Seite einpassen"
             aria-label="Ganze Seite einpassen"
@@ -436,10 +436,10 @@ export function PdfViewer({
           </Button>
         </div>
 
-        <div className="ml-auto flex items-center gap-1">
+        <div className="flex items-center gap-1 ml-auto">
           <Button
             variant="ghost"
-            className="px-2 text-slate-600 hover:text-blue-600"
+            className="px-1.5 sm:px-2 text-slate-600 hover:text-blue-600"
             onClick={() => setInfoModalOpen(true)}
             title="Dokument-Übersicht & Analyse"
             aria-label="Dokument-Übersicht"
@@ -448,7 +448,7 @@ export function PdfViewer({
           </Button>
           <Button
             variant="ghost"
-            className="px-2"
+            className="px-1.5 sm:px-2"
             onClick={handleToggleTextPanel}
             title={state.textPanelOpen ? 'Text ausblenden' : 'Text anzeigen'}
             aria-label="Text anzeigen"
@@ -458,16 +458,17 @@ export function PdfViewer({
           </Button>
           <Button
             variant="secondary"
-            className="gap-2"
+            className="px-2 sm:px-3 py-1 sm:py-1.5 gap-1.5 text-xs sm:text-sm"
             onClick={handleDownload}
             title={`${downloadName} herunterladen`}
+            aria-label={`${downloadName} herunterladen`}
           >
-            <Download className="w-4 h-4" />
-            Download
+            <Download className="w-4 h-4 shrink-0" />
+            <span className="hidden sm:inline">Download</span>
           </Button>
           <Button
             variant="ghost"
-            className="px-2"
+            className="px-1.5 sm:px-2"
             onClick={onClose}
             title="Schließen"
             aria-label="Schließen"
