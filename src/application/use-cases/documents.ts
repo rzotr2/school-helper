@@ -5,6 +5,7 @@ import type {
   Json,
 } from '../../infrastructure/supabase/database.types';
 import { parseDocumentContent, parseProcessingStatus, type DocumentContent } from './documentContent';
+import { validateDocumentUnderstanding, type DocumentUnderstanding } from './documentUnderstanding';
 
 export interface Document {
   id: string;
@@ -28,6 +29,11 @@ export interface Document {
    * 'completed' documents can be opened; every other state offers a retry.
    */
   processingStatus: DocumentProcessingStatus;
+  /**
+   * Persisted semantic metadata (title, documentType, subject, summary, keyTopics).
+   * null when the document has not been analyzed yet.
+   */
+  understanding: DocumentUnderstanding | null;
 }
 
 export const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
@@ -35,7 +41,7 @@ export const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
 type DocumentRow = Database['public']['Tables']['documents']['Row'];
 
 const DOCUMENT_COLUMNS =
-  'id, owner_id, topic_id, original_name, storage_path, mime_type, size, created_at, updated_at, processing_status';
+  'id, owner_id, topic_id, original_name, storage_path, mime_type, size, created_at, updated_at, processing_status, understanding';
 
 /** List columns plus the (potentially large) persisted content column. */
 const DOCUMENT_COLUMNS_WITH_CONTENT = `${DOCUMENT_COLUMNS}, content`;
@@ -57,6 +63,7 @@ function mapDocument(row: DocumentRow): Document {
     // Unknown or absent values fall back to 'pending' (the database
     // default): the document shows as unprocessed and can be retried.
     processingStatus: parseProcessingStatus(row.processing_status) ?? 'pending',
+    understanding: validateDocumentUnderstanding(row.understanding),
   };
 }
 
@@ -113,6 +120,27 @@ export async function getCompletedDocumentsWithContent(userId: string): Promise<
   if (error) throw new Error(error.message);
 
   return data.map(mapDocument);
+}
+
+/**
+ * Fetches only the persisted content of a single document.
+ */
+export async function getDocumentContentById(
+  userId: string,
+  documentId: string,
+): Promise<DocumentContent | null> {
+  if (!userId) throw new Error('User must be authenticated');
+  if (!documentId) throw new Error('Document ID is required');
+
+  const { data, error } = await supabase
+    .from('documents')
+    .select('content')
+    .eq('id', documentId)
+    .eq('owner_id', userId)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return parseDocumentContent(data.content);
 }
 
 /**

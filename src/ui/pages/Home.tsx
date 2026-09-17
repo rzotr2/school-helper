@@ -1,13 +1,27 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, Loader2, ExternalLink, Trash2, Search, AlertCircle, X, Edit2, FolderInput, RefreshCw } from 'lucide-react';
+import { FileText, Loader2, ExternalLink, Trash2, Search, AlertCircle, X, Edit2, FolderInput, RefreshCw, Sparkles, Upload } from 'lucide-react';
 import { useAuth } from '../../infrastructure/auth/AuthContext';
 import {
   Document,
   getAllDocuments,
   getCompletedDocumentsWithContent,
+  getDocumentContentById,
+  uploadDocument,
 } from '../../application/use-cases/documents';
-import { canOpenDocument } from '../../application/use-cases/documentContent';
+import { processDocument } from '../../application/use-cases/documentProcessing';
+import {
+  getDocumentRoutingRecommendations,
+  assignDocumentToTopic,
+  type DocumentRoutingRecommendation,
+} from '../../application/use-cases/documentRouting';
+import { canOpenDocument, type DocumentContent } from '../../application/use-cases/documentContent';
+import {
+  understandDocument,
+  DOCUMENT_TYPE_LABELS,
+} from '../../application/use-cases/documentUnderstanding';
+import { DocumentInfoModal } from '../components/pdf/DocumentInfoModal';
+import { DocumentRoutingModal } from '../components/pdf/DocumentRoutingModal';
 import {
   searchDocuments,
   foldLookalikes,
@@ -15,7 +29,7 @@ import {
   type DocumentSearchResult,
 } from '../../application/use-cases/documentSearch';
 import { Subject, getSubjects, SUBJECTS_CHANGED_EVENT } from '../../application/use-cases/subjects';
-import { Topic, getAllTopics } from '../../application/use-cases/topics';
+import { Topic, getAllTopics, createTopic } from '../../application/use-cases/topics';
 import { NameDialog } from '../components/NameDialog';
 import { MoveDocumentDialog } from '../components/MoveDocumentDialog';
 import { DeleteDialog } from '../components/DeleteDialog';
@@ -134,6 +148,130 @@ export function Home() {
   // Automatic processing (extraction + OCR) runs per document; the hook
   // tracks the in-flight runs of this session and updates the list state.
   const { processingProgress, startProcessing } = useDocumentProcessing(user?.id, setDocuments);
+
+  // Semantic document analysis modal state
+  const [inspectingDoc, setInspectingDoc] = useState<Document | null>(null);
+  const [isAnalyzingDoc, setIsAnalyzingDoc] = useState(false);
+
+  const handleAnalyzeDocument = async (doc: Document) => {
+    if (!user?.id || isAnalyzingDoc) return;
+    setIsAnalyzingDoc(true);
+    try {
+      const result = await understandDocument(user.id, doc.id, { force: true });
+      setDocuments(prev => prev.map(d => d.id === doc.id ? { ...d, understanding: result } : d));
+      setInspectingDoc(prev => prev && prev.id === doc.id ? { ...prev, understanding: result } : prev);
+    } catch (err) {
+      console.error('[Home] Failed to analyze document:', err);
+    } finally {
+      setIsAnalyzingDoc(false);
+    }
+  };
+
+  const [inspectingDocContent, setInspectingDocContent] = useState<DocumentContent | null>(null);
+  const [isLoadingDocContent, setIsLoadingDocContent] = useState(false);
+
+  useEffect(() => {
+    if (!inspectingDoc || !user?.id) {
+      setInspectingDocContent(null);
+      return;
+    }
+    if (inspectingDoc.content) {
+      setInspectingDocContent(inspectingDoc.content);
+      return;
+    }
+    let isCancelled = false;
+    setIsLoadingDocContent(true);
+    getDocumentContentById(user.id, inspectingDoc.id)
+      .then((content) => {
+        if (!isCancelled) {
+          setInspectingDocContent(content);
+        }
+      })
+      .catch((err) => {
+        console.warn('[Home] Failed to load content for document info modal:', err);
+      })
+      .finally(() => {
+        if (!isCancelled) {
+          setIsLoadingDocContent(false);
+        }
+      });
+    return () => {
+      isCancelled = true;
+    };
+  }, [inspectingDoc, user?.id]);
+
+  // Global upload & intelligent routing state
+  const globalFileInputRef = useRef<HTMLInputElement>(null);
+  const [isGlobalUploading, setIsGlobalUploading] = useState(false);
+  const [routingDoc, setRoutingDoc] = useState<Document | null>(null);
+  const [routingRecommendation, setRoutingRecommendation] = useState<DocumentRoutingRecommendation | null>(null);
+  const [isLoadingRouting, setIsLoadingRouting] = useState(false);
+  const [isRoutingModalOpen, setIsRoutingModalOpen] = useState(false);
+
+  const handleGlobalFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    e.target.value = '';
+
+    if (topics.length === 0) {
+      setActionError('Bitte erstelle zuerst mindestens ein Fach und ein Thema, bevor du Dokumente hochlädst.');
+      return;
+    }
+
+    setIsGlobalUploading(true);
+    setActionError(null);
+
+    try {
+      const initialTopic = topics[0];
+      const newDoc = await uploadDocument(user.id, initialTopic.id, file);
+      setDocuments(prev => [newDoc, ...prev]);
+
+      setRoutingDoc(newDoc);
+      setRoutingRecommendation(null);
+      setIsLoadingRouting(true);
+      setIsRoutingModalOpen(true);
+
+      try {
+        await processDocument(user.id, newDoc.id);
+        setDocuments(prev =>
+          prev.map(d => (d.id === newDoc.id ? { ...d, processingStatus: 'completed' } : d))
+        );
+
+        const rec = await getDocumentRoutingRecommendations(user.id, newDoc.id);
+        setRoutingRecommendation(rec);
+      } catch (procErr) {
+        console.warn('[Home] Processing or routing recommendation failed:', procErr);
+        setRoutingRecommendation(null);
+      } finally {
+        setIsLoadingRouting(false);
+      }
+    } catch (uploadErr) {
+      console.error('[Home] Global upload failed:', uploadErr);
+      setActionError(uploadErr instanceof Error ? uploadErr.message : 'Fehler beim Hochladen der Datei.');
+    } finally {
+      setIsGlobalUploading(false);
+    }
+  };
+
+  const handleConfirmRouting = async (
+    destination: { topicId: string } | { createTopicName: string; subjectId: string }
+  ) => {
+    if (!user || !routingDoc) return;
+    let targetTopicId: string;
+    if ('createTopicName' in destination) {
+      const created = await createTopic(user.id, destination.subjectId, destination.createTopicName);
+      targetTopicId = created.id;
+      setTopics(prev => [...prev, created]);
+    } else {
+      targetTopicId = destination.topicId;
+    }
+
+    const movedDoc = await assignDocumentToTopic(user.id, routingDoc.id, targetTopicId);
+    setDocuments(prev => prev.map(d => (d.id === routingDoc.id ? movedDoc : d)));
+    setIsRoutingModalOpen(false);
+    setRoutingDoc(null);
+    setRoutingRecommendation(null);
+  };
 
   // Filters
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>('all');
@@ -318,11 +456,34 @@ export function Home() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-1 border-b border-slate-200 pb-5">
-        <h1 className="text-2xl font-semibold text-slate-900">Alle Dateien</h1>
-        <p className="text-sm text-slate-500">
-          Übersicht aller hochgeladenen PDF-Unterlagen aus deinen Fächern und Themen.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-5">
+        <div>
+          <h1 className="text-2xl font-semibold text-slate-900">Alle Dateien</h1>
+          <p className="text-sm text-slate-500">
+            Übersicht aller hochgeladenen PDF-Unterlagen aus deinen Fächern und Themen.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            type="file"
+            ref={globalFileInputRef}
+            onChange={handleGlobalFileUpload}
+            accept="application/pdf"
+            className="hidden"
+          />
+          <button
+            onClick={() => globalFileInputRef.current?.click()}
+            disabled={isGlobalUploading}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg shadow-xs transition-colors cursor-pointer disabled:opacity-50"
+          >
+            {isGlobalUploading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Upload className="w-4 h-4" />
+            )}
+            <span>Dokument hochladen</span>
+          </button>
+        </div>
       </div>
 
       {actionError && (
@@ -612,11 +773,25 @@ export function Home() {
                             Verarbeitung fehlgeschlagen
                           </p>
                         ) : isOpenable ? (
-                          <p className="text-xs text-slate-400 mt-0.5">
-                            {formatFileSize(doc.size)}
-                            <span className="mx-1.5 text-slate-300">·</span>
-                            {formatDate(doc.createdAt)}
-                          </p>
+                          <div className="mt-0.5 space-y-1">
+                            <p className="text-xs text-slate-400">
+                              {formatFileSize(doc.size)}
+                              <span className="mx-1.5 text-slate-300">·</span>
+                              {formatDate(doc.createdAt)}
+                            </p>
+                            {doc.understanding && (
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-200/60">
+                                  {DOCUMENT_TYPE_LABELS[doc.understanding.documentType] ?? 'Dokument'}
+                                </span>
+                                {doc.understanding.title && (
+                                  <span className="text-[11px] text-slate-600 font-medium truncate max-w-[200px]">
+                                    {doc.understanding.title}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         ) : doc.processingStatus === 'processing' ? (
                           // A persisted 'processing' row with no live run in this
                           // session: the browser run that started it is gone
@@ -635,6 +810,16 @@ export function Home() {
                     </button>
 
                     <div className="flex items-center gap-1.5 ml-4 shrink-0">
+                      {isOpenable && (
+                        <button
+                          onClick={() => setInspectingDoc(doc)}
+                          className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                          title="Dokument-Übersicht & Analyse"
+                          aria-label="Dokument-Übersicht & Analyse"
+                        >
+                          <Sparkles className={cn("w-4 h-4", doc.understanding ? "text-blue-600" : "")} />
+                        </button>
+                      )}
                       {!isOpenable && (
                         <button
                           onClick={() => void startProcessing(doc.id)}
@@ -725,6 +910,38 @@ export function Home() {
             Das Dokument <span className="font-semibold text-slate-900">"{docToDelete?.originalName}"</span> wird dauerhaft gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.
           </>
         }
+      />
+
+      <DocumentInfoModal
+        isOpen={!!inspectingDoc}
+        onClose={() => setInspectingDoc(null)}
+        documentName={inspectingDoc?.originalName ?? ''}
+        documentId={inspectingDoc?.id}
+        content={inspectingDocContent}
+        isLoadingContent={isLoadingDocContent}
+        onNavigateToPage={(page) => {
+          if (inspectingDoc) {
+            navigate(`/document/${inspectingDoc.id}?page=${page}`);
+          }
+        }}
+        understanding={inspectingDoc?.understanding ?? null}
+        isAnalyzing={isAnalyzingDoc}
+        onAnalyze={() => inspectingDoc && void handleAnalyzeDocument(inspectingDoc)}
+      />
+
+      <DocumentRoutingModal
+        isOpen={isRoutingModalOpen}
+        onClose={() => {
+          setIsRoutingModalOpen(false);
+          setRoutingDoc(null);
+          setRoutingRecommendation(null);
+        }}
+        documentName={routingDoc?.originalName ?? ''}
+        subjects={subjects}
+        topics={topics}
+        recommendation={routingRecommendation}
+        isLoadingRecommendation={isLoadingRouting}
+        onConfirm={handleConfirmRouting}
       />
     </div>
   );

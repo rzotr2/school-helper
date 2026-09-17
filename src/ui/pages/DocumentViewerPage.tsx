@@ -14,6 +14,7 @@ import { useAuth } from '../../infrastructure/auth/AuthContext';
 import { downloadDocument } from '../../application/use-cases/documents';
 import type { Document } from '../../application/use-cases/documents';
 import { processDocument } from '../../application/use-cases/documentProcessing';
+import { understandDocument } from '../../application/use-cases/documentUnderstanding';
 import {
   canOpenDocument,
   documentContentToInspection,
@@ -70,6 +71,7 @@ export function DocumentViewerPage() {
   // Whether an in-viewer retry run is currently in flight (disables the
   // retry button; the run is the same processDocument the list pages use).
   const [retryRunning, setRetryRunning] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   // Explicit OCR lifecycle. The OCR operation is owned here: a new run or
   // a document change aborts the previous one, and the generation counter
@@ -323,6 +325,22 @@ export function DocumentViewerPage() {
     else navigate('/');
   };
 
+  const handleAnalyze = async () => {
+    if (!userId || !session || isAnalyzing) return;
+    setIsAnalyzing(true);
+    try {
+      const result = await understandDocument(userId, session.document.id, { force: true });
+      setSession(prev => prev ? {
+        ...prev,
+        document: { ...prev.document, understanding: result },
+      } : null);
+    } catch (err) {
+      console.error('[DocumentViewerPage] Analysis failed:', err);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
   if (session !== null) {
     return (
       // Fills the space below the header and the main padding (h-14 + p-8).
@@ -333,6 +351,11 @@ export function DocumentViewerPage() {
           downloadName={session.document.originalName}
           downloadSource={session.blob}
           initialPage={initialPage}
+          content={session.document.content}
+          documentId={session.document.id}
+          understanding={session.document.understanding}
+          isAnalyzing={isAnalyzing}
+          onAnalyze={() => void handleAnalyze()}
           onRunOcr={(pageNumber) => void runOcrForPage(pageNumber)}
           onClose={handleClose}
         />

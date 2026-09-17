@@ -10,6 +10,13 @@ export default defineConfig(() => {
       hmr: process.env.DISABLE_HMR !== 'true',
       // Disable file watching to save CPU when HMR is off.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      proxy: {
+        '/api/deepseek': {
+          target: 'https://api.deepseek.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api\/deepseek/, ''),
+        },
+      },
     },
   };
 });

@@ -1,12 +1,17 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Loader2, ChevronRight, Folder, FileText, Upload, Trash2, ExternalLink, Edit2, FolderInput, AlertCircle, X, RefreshCw } from 'lucide-react';
+import { Loader2, ChevronRight, Folder, FileText, Upload, Trash2, ExternalLink, Edit2, FolderInput, AlertCircle, X, RefreshCw, Sparkles } from 'lucide-react';
 import { Button } from '../components/Button';
 import { NameDialog } from '../components/NameDialog';
 import { MoveDocumentDialog } from '../components/MoveDocumentDialog';
 import { DeleteDialog } from '../components/DeleteDialog';
-import { Document, getDocumentsForTopic, uploadDocument } from '../../application/use-cases/documents';
-import { canOpenDocument } from '../../application/use-cases/documentContent';
+import { Document, getDocumentsForTopic, uploadDocument, getDocumentContentById } from '../../application/use-cases/documents';
+import { canOpenDocument, type DocumentContent } from '../../application/use-cases/documentContent';
+import {
+  understandDocument,
+  DOCUMENT_TYPE_LABELS,
+} from '../../application/use-cases/documentUnderstanding';
+import { DocumentInfoModal } from '../components/pdf/DocumentInfoModal';
 import { useDocumentActions } from '../hooks/useDocumentActions';
 import { useDocumentProcessing } from '../hooks/useDocumentProcessing';
 import { formatFileSize, formatDate } from '../../shared/utils/format';
@@ -53,6 +58,57 @@ export function TopicPage() {
   // Automatic processing (extraction + OCR) runs per document; the hook
   // tracks the in-flight runs of this session and updates the list state.
   const { processingProgress, startProcessing } = useDocumentProcessing(user?.id, setDocuments);
+
+  // Semantic document analysis modal state
+  const [inspectingDoc, setInspectingDoc] = useState<Document | null>(null);
+  const [isAnalyzingDoc, setIsAnalyzingDoc] = useState(false);
+
+  const handleAnalyzeDocument = async (doc: Document) => {
+    if (!user?.id || isAnalyzingDoc) return;
+    setIsAnalyzingDoc(true);
+    try {
+      const result = await understandDocument(user.id, doc.id, { force: true });
+      setDocuments(prev => prev.map(d => d.id === doc.id ? { ...d, understanding: result } : d));
+      setInspectingDoc(prev => prev && prev.id === doc.id ? { ...prev, understanding: result } : prev);
+    } catch (err) {
+      console.error('[TopicPage] Failed to analyze document:', err);
+    } finally {
+      setIsAnalyzingDoc(false);
+    }
+  };
+
+  const [inspectingDocContent, setInspectingDocContent] = useState<DocumentContent | null>(null);
+  const [isLoadingDocContent, setIsLoadingDocContent] = useState(false);
+
+  useEffect(() => {
+    if (!inspectingDoc || !user?.id) {
+      setInspectingDocContent(null);
+      return;
+    }
+    if (inspectingDoc.content) {
+      setInspectingDocContent(inspectingDoc.content);
+      return;
+    }
+    let isCancelled = false;
+    setIsLoadingDocContent(true);
+    getDocumentContentById(user.id, inspectingDoc.id)
+      .then((content) => {
+        if (!isCancelled) {
+          setInspectingDocContent(content);
+        }
+      })
+      .catch((err) => {
+        console.warn('[TopicPage] Failed to load content for document info modal:', err);
+      })
+      .finally(() => {
+        if (!isCancelled) {
+          setIsLoadingDocContent(false);
+        }
+      });
+    return () => {
+      isCancelled = true;
+    };
+  }, [inspectingDoc, user?.id]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -268,9 +324,23 @@ export function TopicPage() {
                         Verarbeitung fehlgeschlagen
                       </p>
                     ) : isOpenable ? (
-                      <p className="text-xs text-slate-500">
-                        {formatFileSize(doc.size)} &middot; {formatDate(doc.createdAt)}
-                      </p>
+                      <div className="space-y-1">
+                        <p className="text-xs text-slate-500">
+                          {formatFileSize(doc.size)} &middot; {formatDate(doc.createdAt)}
+                        </p>
+                        {doc.understanding && (
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-200/60">
+                              {DOCUMENT_TYPE_LABELS[doc.understanding.documentType] ?? 'Dokument'}
+                            </span>
+                            {doc.understanding.title && (
+                              <span className="text-[11px] text-slate-600 font-medium truncate max-w-[200px]">
+                                {doc.understanding.title}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     ) : doc.processingStatus === 'processing' ? (
                       // A persisted 'processing' row with no live run in this
                       // session: the browser run that started it is gone
@@ -289,6 +359,16 @@ export function TopicPage() {
                 </button>
 
                 <div className="flex items-center gap-1.5 ml-4 shrink-0">
+                  {isOpenable && (
+                    <button
+                      onClick={() => setInspectingDoc(doc)}
+                      className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                      title="Dokument-Übersicht & Analyse"
+                      aria-label="Dokument-Übersicht & Analyse"
+                    >
+                      <Sparkles className={cn("w-4 h-4", doc.understanding ? "text-blue-600" : "")} />
+                    </button>
+                  )}
                   {!isOpenable && (
                     <button
                       onClick={() => void startProcessing(doc.id)}
@@ -377,6 +457,23 @@ export function TopicPage() {
             Das Dokument <span className="font-semibold text-slate-900">"{docToDelete?.originalName}"</span> wird dauerhaft gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.
           </>
         }
+      />
+
+      <DocumentInfoModal
+        isOpen={!!inspectingDoc}
+        onClose={() => setInspectingDoc(null)}
+        documentName={inspectingDoc?.originalName ?? ''}
+        documentId={inspectingDoc?.id}
+        content={inspectingDocContent}
+        isLoadingContent={isLoadingDocContent}
+        onNavigateToPage={(page) => {
+          if (inspectingDoc) {
+            navigate(`/document/${inspectingDoc.id}?page=${page}`);
+          }
+        }}
+        understanding={inspectingDoc?.understanding ?? null}
+        isAnalyzing={isAnalyzingDoc}
+        onAnalyze={() => inspectingDoc && void handleAnalyzeDocument(inspectingDoc)}
       />
     </div>
   );

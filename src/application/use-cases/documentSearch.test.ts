@@ -35,6 +35,7 @@ function createMockDocument(overrides: Partial<Document> = {}): Document {
         },
       ],
     },
+    understanding: null,
     ...overrides,
   };
 }

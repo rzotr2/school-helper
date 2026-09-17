@@ -22,15 +22,16 @@ defaults and a `set_updated_at` trigger).
 application-owned per-page extraction data, persisted so reopening a document
 reuses already extracted/OCR'd pages instead of re-processing them. The shape is
 exactly `{ "pages": [ { "pageNumber", "nativeText", "quality", "ocrText",
-"ocrStatus" } ] }` — the typed contract `Document → DocumentContent →
+"ocrStatus", "blocks?" } ] }` — the typed contract `Document → DocumentContent →
 PageContent[]` in `src/application/use-cases/documentContent.ts`. `nativeText`
 is the PDF text layer and is never overwritten by OCR; `ocrText` is the
 independent OCR output, `NULL` when no OCR result exists; `ocrStatus` is
-`not-generated` | `completed` | `failed`. Automatic processing extracts the
-native layer and runs OCR for every page, so fresh content carries both
-representations. `getDocumentPageText()` is the application-level entry point
-for future text-consuming features (search, summaries); the two representations
-are never merged. `NULL` = no persisted content yet (pre-migration or legacy
+`not-generated` | `completed` | `failed`; `blocks` is an optional array of
+deterministic structural blocks (`{ "text", "type": "paragraph" | "heading" | "list" }`).
+Automatic processing extracts the native layer, segments structure, and runs OCR for every page,
+so fresh content carries all representations. `getDocumentPageText()` and `getDocumentPageBlocks()`
+are the application-level entry points for text-consuming features (search, summaries, quiz, RAG);
+the representations are never merged or replaced. `NULL` = no persisted content yet (pre-migration or legacy
 rows): the viewer's inspect-on-open fallback re-runs the pipeline and persists
 the fresh result. The original PDF in Storage remains the visual source of
 truth; no rendered images or PDF bytes are stored in the database.
@@ -41,6 +42,13 @@ pre-existing rows migrated to `completed`). Only `completed` documents can be
 opened; content and the `completed` status are written in one UPDATE, so a
 document is never openable without its extraction data. Processing runs in the
 browser; the persisted status is what survives reloads.
+
+`understanding` is a nullable `jsonb` column added by `0005_document_understanding.sql`:
+persisted semantic understanding metadata (`{ "title", "documentType", "subject", "summary",
+"keyTopics", "analyzedAt" }` — the contract in `src/application/use-cases/documentUnderstanding.ts`).
+It is strictly optional (`NULL` when not analyzed yet) and independent from `processing_status`.
+Input is prepared deterministically from persisted `content` (prioritizing `blocks`, falling back
+to `nativeText` and `ocrText`), and generated via the server-side Edge Function `understand-document`.
 
 All foreign keys cascade on delete: auth.users → profiles/subjects/topics/documents
 (by `owner_id`), subjects → topics, topics → documents.

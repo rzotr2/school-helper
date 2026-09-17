@@ -6,7 +6,10 @@ import type {
 
 export type { DocumentProcessingStatus };
 import { evaluateTextQuality } from '../../infrastructure/pdf/textQuality';
-import type { TextQuality } from '../../infrastructure/pdf/types';
+import type { TextBlock, TextBlockType, TextQuality, DocumentSection } from '../../infrastructure/pdf/types';
+export type { TextBlock, TextBlockType, DocumentSection };
+import { buildDocumentSections } from '../../infrastructure/pdf/textStructure';
+export { buildDocumentSections };
 import {
   pagesHaveUsableText,
   type OcrStatus,
@@ -47,11 +50,21 @@ export interface PageContent {
   ocrText: string | null;
   /** Persisted OCR lifecycle (see PersistedOcrStatus). */
   ocrStatus: PersistedOcrStatus;
+  /**
+   * Deterministic structural text blocks extracted from the native text layer.
+   * Optional: absent when no structure was extracted or on legacy content.
+   */
+  blocks?: TextBlock[];
 }
 
-/** The documents.content column: all persisted pages. */
+/** The documents.content column: all persisted pages and optional document sections. */
 export interface DocumentContent {
   pages: PageContent[];
+  /**
+   * Deterministic document sections derived from native text blocks.
+   * Optional: absent when no sections were generated or on legacy content.
+   */
+  sections?: DocumentSection[];
 }
 
 const PERSISTED_OCR_STATUSES: readonly PersistedOcrStatus[] = [
@@ -101,6 +114,29 @@ function normalizeTextQuality(value: unknown, nativeText: string): TextQuality |
   };
 }
 
+const VALID_BLOCK_TYPES: readonly TextBlockType[] = ['paragraph', 'heading', 'list'];
+
+function isTextBlock(value: unknown): value is TextBlock {
+  if (typeof value !== 'object' || value === null) return false;
+  const block = value as Record<string, unknown>;
+  return (
+    typeof block.text === 'string' &&
+    typeof block.type === 'string' &&
+    VALID_BLOCK_TYPES.includes(block.type as TextBlockType)
+  );
+}
+
+function parseBlocks(value: unknown): TextBlock[] | null | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) return null;
+  const blocks: TextBlock[] = [];
+  for (const item of value) {
+    if (!isTextBlock(item)) return null;
+    blocks.push({ text: item.text, type: item.type });
+  }
+  return blocks;
+}
+
 function parsePersistedPage(value: unknown): PageContent | null {
   if (typeof value !== 'object' || value === null) return null;
   const page = value as Record<string, unknown>;
@@ -121,13 +157,44 @@ function parsePersistedPage(value: unknown): PageContent | null {
     return null;
   }
 
+  const parsedBlocks = parseBlocks(page.blocks);
+  if (parsedBlocks === null) return null;
+
   return {
     pageNumber: page.pageNumber,
     nativeText: page.nativeText,
     quality,
     ocrText: page.ocrText ?? null,
     ocrStatus,
+    ...(parsedBlocks !== undefined ? { blocks: parsedBlocks } : {}),
   };
+}
+
+function isDocumentSection(value: unknown): value is DocumentSection {
+  if (typeof value !== 'object' || value === null) return false;
+  const section = value as Record<string, unknown>;
+  if (section.title !== null && typeof section.title !== 'string') return false;
+  if (!isPageNumber(section.pageStart)) return false;
+  if (!isPageNumber(section.pageEnd)) return false;
+  if (section.pageStart > section.pageEnd) return false;
+  if (!Array.isArray(section.blocks)) return false;
+  return section.blocks.every(isTextBlock);
+}
+
+function parseSections(value: unknown): DocumentSection[] | null | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) return null;
+  const sections: DocumentSection[] = [];
+  for (const item of value) {
+    if (!isDocumentSection(item)) return null;
+    sections.push({
+      title: item.title,
+      blocks: item.blocks.map((b) => ({ text: b.text, type: b.type })),
+      pageStart: item.pageStart,
+      pageEnd: item.pageEnd,
+    });
+  }
+  return sections;
 }
 
 /**
@@ -157,7 +224,14 @@ export function parseDocumentContent(value: unknown): DocumentContent | null {
   // Page boundaries must stay unambiguous (search maps a match to exactly
   // one page): duplicate page numbers mean corrupt data.
   if (new Set(parsedPages.map((page) => page.pageNumber)).size !== parsedPages.length) return null;
-  return { pages: parsedPages };
+
+  const parsedSections = parseSections(content.sections);
+  if (parsedSections === null) return null;
+
+  return {
+    pages: parsedPages,
+    ...(parsedSections !== undefined ? { sections: parsedSections } : {}),
+  };
 }
 
 // ── Text access ──────────────────────────────────────────────────────────────
@@ -182,6 +256,37 @@ export function getDocumentPageText(
   const page = content.pages.find((candidate) => candidate.pageNumber === pageNumber);
   if (page === undefined) return null;
   return { nativeText: page.nativeText, ocrText: page.ocrText };
+}
+
+/**
+ * The structural text blocks of one page of a document. Returns null when the
+ * document has no persisted content for that page, or when no structural
+ * blocks were extracted (e.g. legacy content or image-only pages).
+ *
+ * This is the application-level entry point for future structured text
+ * consumers (summaries, quiz, RAG).
+ */
+export function getDocumentPageBlocks(
+  content: DocumentContent | null,
+  pageNumber: number,
+): TextBlock[] | null {
+  if (content === null) return null;
+  const page = content.pages.find((candidate) => candidate.pageNumber === pageNumber);
+  if (page === undefined || page.blocks === undefined) return null;
+  return page.blocks;
+}
+
+/**
+ * The document-level structural sections. Returns null when content is null
+ * or when the document has no sections (e.g. legacy content or image-only documents).
+ *
+ * This is the application-level entry point for future structured document consumers.
+ */
+export function getDocumentSections(
+  content: DocumentContent | null,
+): DocumentSection[] | null {
+  if (content === null || content.sections === undefined) return null;
+  return content.sections;
 }
 
 // ── Document processing lifecycle ────────────────────────────────────────────
@@ -225,14 +330,20 @@ function toPersistedOcrStatus(status: OcrStatus): PersistedOcrStatus {
  * collapse to 'not-generated'; only final OCR outcomes are stored.
  */
 export function inspectionToDocumentContent(inspection: PdfInspectionResult): DocumentContent {
+  const pages: PageContent[] = inspection.pages.map((page) => ({
+    pageNumber: page.pageNumber,
+    nativeText: page.nativeText,
+    quality: page.quality,
+    ocrText: page.ocrText,
+    ocrStatus: toPersistedOcrStatus(page.ocrStatus),
+    ...(page.blocks !== undefined ? { blocks: page.blocks } : {}),
+  }));
+
+  const sections = buildDocumentSections(pages);
+
   return {
-    pages: inspection.pages.map((page) => ({
-      pageNumber: page.pageNumber,
-      nativeText: page.nativeText,
-      quality: page.quality,
-      ocrText: page.ocrText,
-      ocrStatus: toPersistedOcrStatus(page.ocrStatus),
-    })),
+    pages,
+    ...(sections.length > 0 ? { sections } : {}),
   };
 }
 
@@ -262,6 +373,7 @@ export function documentContentToInspection(
       ocrStatus: persisted?.ocrStatus === 'completed' || persisted?.ocrStatus === 'failed'
         ? persisted.ocrStatus
         : 'not-needed',
+      ...(persisted?.blocks !== undefined ? { blocks: persisted.blocks } : {}),
     });
   }
   return {
@@ -291,6 +403,7 @@ export function persistedPageFromOcrUpdate(
     quality: page.quality,
     ocrText: update.ocrText,
     ocrStatus: update.ocrStatus,
+    ...(page.blocks !== undefined ? { blocks: page.blocks } : {}),
   };
 }
 
@@ -304,7 +417,10 @@ function withPageContent(
   );
   pages.push(page);
   pages.sort((left, right) => left.pageNumber - right.pageNumber);
-  return { pages };
+  return {
+    pages,
+    ...(content?.sections !== undefined ? { sections: content.sections } : {}),
+  };
 }
 
 /**

@@ -46,6 +46,24 @@ export interface TextQuality {
   reasons: string[];
 }
 
+export type TextBlockType = 'paragraph' | 'heading' | 'list';
+
+export interface TextBlock {
+  text: string;
+  type: TextBlockType;
+}
+
+/**
+ * Deterministic logical section of a document, grouping related blocks
+ * across pages under an optional heading title.
+ */
+export interface DocumentSection {
+  title: string | null;
+  blocks: TextBlock[];
+  pageStart: number;
+  pageEnd: number;
+}
+
 /** Inspection result of one page: two independent text representations. */
 export interface PdfPageInspection {
   /** 1-based page number. */
@@ -62,6 +80,11 @@ export interface PdfPageInspection {
   ocrText: string | null;
   /** Lifecycle of the OCR representation (see OcrStatus). */
   ocrStatus: OcrStatus;
+  /**
+   * Deterministic structural text blocks extracted from the native text layer.
+   * Optional: absent when no structure was extracted (e.g. image-only pages or legacy content).
+   */
+  blocks?: TextBlock[];
 }
 
 /** Position of an annotation on its page (PDF coordinates, origin bottom-left). */

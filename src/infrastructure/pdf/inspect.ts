@@ -9,8 +9,10 @@ import type {
   PdfInspectOptions,
   PdfInspectionResult,
   PdfPageInspection,
+  TextBlock,
 } from './types';
 import { pagesHaveUsableText } from './types';
+import { extractTextBlocks } from './textStructure';
 
 /**
  * The fields of a pdf.js annotation object that inspection keeps. The
@@ -180,6 +182,7 @@ export async function inspectPdfDocument(
       }
 
       let nativeText = '';
+      let blocks: TextBlock[] | undefined;
       try {
         const content = await page.getTextContent();
         // Text items carry the actual text; marked-content items don't.
@@ -187,6 +190,10 @@ export async function inspectPdfDocument(
           if (!('str' in item)) continue;
           nativeText += item.str;
           if (item.hasEOL) nativeText += '\n';
+        }
+        const extracted = extractTextBlocks(content.items);
+        if (extracted.length > 0) {
+          blocks = extracted;
         }
       } catch {
         throw new PdfInspectionError(`Text extraction failed on page ${pageNumber}`);
@@ -217,6 +224,7 @@ export async function inspectPdfDocument(
         quality,
         ocrText: null,
         ocrStatus: 'pending',
+        ...(blocks !== undefined ? { blocks } : {}),
       });
     }
 

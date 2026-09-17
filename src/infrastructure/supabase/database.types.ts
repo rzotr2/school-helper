@@ -110,6 +110,11 @@ export type Database = {
            * in Row: queries that do not select the column report no key.
            */
           processing_status?: DocumentProcessingStatus | null;
+          /**
+           * Persisted semantic metadata (title, documentType, subject,
+           * summary, keyTopics, analyzedAt). NULL = not analyzed yet.
+           */
+          understanding?: Json | null;
         };
         Insert: {
           id: string;
@@ -123,6 +128,7 @@ export type Database = {
           updated_at?: string;
           content?: Json | null;
           processing_status?: DocumentProcessingStatus | null;
+          understanding?: Json | null;
         };
         Update: {
           original_name?: string;
@@ -130,6 +136,7 @@ export type Database = {
           updated_at?: string;
           content?: Json | null;
           processing_status?: DocumentProcessingStatus | null;
+          understanding?: Json | null;
         };
         Relationships: [];
       };

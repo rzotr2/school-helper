@@ -21,6 +21,7 @@ import {
   Loader2,
   Maximize,
   MoveHorizontal,
+  Sparkles,
   X,
   ZoomIn,
   ZoomOut,
@@ -30,6 +31,9 @@ import { renderPdfAnnotationLayer } from '../../../infrastructure/pdf/annotation
 import { PdfViewerLinkService } from '../../../infrastructure/pdf/pdfLinkService';
 import { renderPdfPage } from '../../../infrastructure/pdf/render';
 import type { PdfInspectionResult } from '../../../infrastructure/pdf/types';
+import type { DocumentUnderstanding } from '../../../application/use-cases/documentUnderstanding';
+import type { DocumentContent } from '../../../application/use-cases/documentContent';
+import { DocumentInfoModal } from './DocumentInfoModal';
 import './annotationLayer.css';
 import { Button } from '../Button';
 import {
@@ -56,6 +60,16 @@ export interface PdfViewerProps {
   downloadSource: Blob | ArrayBuffer | Uint8Array;
   /** Initial 1-based page to open at (defaults to 1). */
   initialPage?: number;
+  /** Optional persisted document content including sections. */
+  content?: DocumentContent | null;
+  /** Optional document ID. */
+  documentId?: string;
+  /** Optional persisted semantic understanding metadata. */
+  understanding?: DocumentUnderstanding | null;
+  /** Whether understanding analysis is currently running. */
+  isAnalyzing?: boolean;
+  /** Triggers document analysis. */
+  onAnalyze?: () => void;
   /** Runs explicit OCR for one page; the parent owns the operation. */
   onRunOcr: (pageNumber: number) => void;
   /** Called when the user closes the viewer; navigation is the parent's job. */
@@ -68,6 +82,11 @@ export function PdfViewer({
   downloadName,
   downloadSource,
   initialPage = 1,
+  content = null,
+  documentId,
+  understanding = null,
+  isAnalyzing = false,
+  onAnalyze,
   onRunOcr,
   onClose,
 }: PdfViewerProps) {
@@ -80,6 +99,7 @@ export function PdfViewer({
   const fitModeRef = useRef<'width' | 'page' | null>(null);
   const pageRef = useRef(1);
   const [renderErrorMessage, setRenderErrorMessage] = useState<string | null>(null);
+  const [infoModalOpen, setInfoModalOpen] = useState(false);
 
   const [state, dispatch] = useReducer(
     viewerStateReducer,
@@ -419,6 +439,15 @@ export function PdfViewer({
         <div className="ml-auto flex items-center gap-1">
           <Button
             variant="ghost"
+            className="px-2 text-slate-600 hover:text-blue-600"
+            onClick={() => setInfoModalOpen(true)}
+            title="Dokument-Übersicht & Analyse"
+            aria-label="Dokument-Übersicht"
+          >
+            <Sparkles className="w-4 h-4 text-blue-600" />
+          </Button>
+          <Button
+            variant="ghost"
             className="px-2"
             onClick={handleToggleTextPanel}
             title={state.textPanelOpen ? 'Text ausblenden' : 'Text anzeigen'}
@@ -543,6 +572,22 @@ export function PdfViewer({
           </pre>
         </div>
       )}
+
+      {/* Document Overview & Semantic Understanding Modal */}
+      <DocumentInfoModal
+        isOpen={infoModalOpen}
+        onClose={() => setInfoModalOpen(false)}
+        documentName={downloadName}
+        documentId={documentId}
+        content={content}
+        onNavigateToPage={(page) => {
+          dispatch({ type: 'SET_PAGE', page });
+          setInfoModalOpen(false);
+        }}
+        understanding={understanding}
+        isAnalyzing={isAnalyzing}
+        onAnalyze={() => onAnalyze?.()}
+      />
     </div>
   );
 }
