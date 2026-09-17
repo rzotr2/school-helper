@@ -5,13 +5,14 @@ import { evaluateTextQuality } from '../../infrastructure/pdf/textQuality';
 import {
   canOpenDocument,
   documentContentToInspection,
+  getDocumentPageText,
   inspectionToDocumentContent,
   parseDocumentContent,
   parseProcessingStatus,
   persistedPageFromOcrUpdate,
-  withPageOcrUpdate,
+  mergePageOcrUpdate,
   type DocumentContent,
-  type PersistedPageContent,
+  type PageContent,
 } from './documentContent';
 
 // Pure-function tests only: no Supabase client, no mocks. The critical
@@ -22,7 +23,7 @@ const nativeText = 'Dies ist eine native Textzeile.';
 const usableQuality = evaluateTextQuality(nativeText);
 const emptyQuality = evaluateTextQuality('');
 
-function persistedPage(overrides: Partial<PersistedPageContent> = {}): PersistedPageContent {
+function persistedPage(overrides: Partial<PageContent> = {}): PageContent {
   return {
     pageNumber: 1,
     nativeText,
@@ -97,6 +98,93 @@ describe('parseDocumentContent', () => {
   it('returns the typed content for a valid value', () => {
     const content: DocumentContent = { pages: [persistedPage()] };
     expect(parseDocumentContent(content)).toEqual(content);
+  });
+
+  // Scenario: page boundaries must stay unambiguous for future search —
+  // page numbers that cannot occur in the pipeline mean corrupt data.
+  it('rejects a page number of 0', () => {
+    expect(parseDocumentContent({ pages: [persistedPage({ pageNumber: 0 })] })).toBeNull();
+  });
+
+  it('rejects negative page numbers', () => {
+    expect(parseDocumentContent({ pages: [persistedPage({ pageNumber: -1 })] })).toBeNull();
+  });
+
+  it('rejects fractional page numbers', () => {
+    expect(parseDocumentContent({ pages: [persistedPage({ pageNumber: 1.5 })] })).toBeNull();
+  });
+
+  it('rejects duplicate page numbers', () => {
+    expect(parseDocumentContent({ pages: [persistedPage(), persistedPage()] })).toBeNull();
+  });
+});
+
+describe('getDocumentPageText', () => {
+  // Scenario: legacy documents (content NULL) and documents without a
+  // persisted entry for a page must yield null — "no persisted text".
+  it('returns null when content is null', () => {
+    expect(getDocumentPageText(null, 1)).toBeNull();
+  });
+
+  it('returns null when the page is missing', () => {
+    const content: DocumentContent = { pages: [persistedPage({ pageNumber: 1 })] };
+    expect(getDocumentPageText(content, 2)).toBeNull();
+  });
+
+  // Scenario: future text-consuming features (search, summaries) get the
+  // two representations exactly as stored — never merged, no winner.
+  it('returns native and OCR text exactly as stored, independently', () => {
+    const content: DocumentContent = {
+      pages: [persistedPage({ pageNumber: 1, ocrStatus: 'completed', ocrText: 'OCR-Text' })],
+    };
+    expect(getDocumentPageText(content, 1)).toEqual({
+      nativeText,
+      ocrText: 'OCR-Text',
+    });
+  });
+
+  it('never replaces the native text with OCR output', () => {
+    const content: DocumentContent = {
+      pages: [
+        persistedPage({
+          pageNumber: 1,
+          nativeText: '',
+          ocrStatus: 'completed',
+          ocrText: 'OCR-Text',
+        }),
+      ],
+    };
+    // An empty native text is returned as native, not substituted by OCR:
+    // the result carries both fields and no winner is chosen.
+    expect(getDocumentPageText(content, 1)).toEqual({ nativeText: '', ocrText: 'OCR-Text' });
+  });
+
+  it('preserves ocrText null for a page without OCR output', () => {
+    const content: DocumentContent = {
+      pages: [persistedPage({ pageNumber: 1, ocrStatus: 'not-generated', ocrText: null })],
+    };
+    expect(getDocumentPageText(content, 1)).toEqual({ nativeText, ocrText: null });
+  });
+});
+
+describe('serialized content shape', () => {
+  // Scenario: the persisted JSON must stay exactly { pages: [...] } with
+  // the five page fields — no extra keys from the runtime inspection model.
+  it('serializes to exactly the persisted JSON structure', () => {
+    const content = inspectionToDocumentContent(
+      inspection([inspectionPage({ ocrStatus: 'completed', ocrText: 'OCR-Text' })]),
+    );
+    expect(JSON.parse(JSON.stringify(content))).toEqual({
+      pages: [
+        {
+          pageNumber: 1,
+          nativeText,
+          quality: usableQuality,
+          ocrText: 'OCR-Text',
+          ocrStatus: 'completed',
+        },
+      ],
+    });
   });
 });
 
@@ -253,13 +341,13 @@ describe('persistedPageFromOcrUpdate', () => {
   });
 });
 
-describe('withPageOcrUpdate', () => {
+describe('mergePageOcrUpdate', () => {
   // Scenario: an OCR run for one page must not modify any other page.
   it('writes only the updated page and leaves the others untouched', () => {
     const content: DocumentContent = {
       pages: [persistedPage(), persistedPage({ pageNumber: 2 }), persistedPage({ pageNumber: 3 })],
     };
-    const merged = withPageOcrUpdate(
+    const merged = mergePageOcrUpdate(
       content,
       persistedPage({ pageNumber: 3, ocrStatus: 'completed', ocrText: 'OCR-Seite 3' }),
     );
@@ -281,7 +369,7 @@ describe('withPageOcrUpdate', () => {
     const content: DocumentContent = {
       pages: [persistedPage({ ocrStatus: 'completed', ocrText: 'OCR-Text' })],
     };
-    expect(withPageOcrUpdate(content, persistedPage({ ocrStatus: 'failed', ocrText: null }))).toBeNull();
+    expect(mergePageOcrUpdate(content, persistedPage({ ocrStatus: 'failed', ocrText: null }))).toBeNull();
     expect(content.pages[0]).toEqual({
       pageNumber: 1,
       nativeText,
@@ -294,7 +382,7 @@ describe('withPageOcrUpdate', () => {
   it('a failed update that still carries text is stored as completed', () => {
     // Text without a completed status would be an inconsistent persisted
     // state; the merge normalizes it.
-    const merged = withPageOcrUpdate(
+    const merged = mergePageOcrUpdate(
       null,
       persistedPage({ ocrStatus: 'failed', ocrText: 'OCR-Text' }),
     );
@@ -308,7 +396,7 @@ describe('withPageOcrUpdate', () => {
   });
 
   it('a failed update without text records failed when nothing existed', () => {
-    const merged = withPageOcrUpdate(null, persistedPage({ ocrStatus: 'failed' }));
+    const merged = mergePageOcrUpdate(null, persistedPage({ ocrStatus: 'failed' }));
     expect(merged?.pages[0].ocrStatus).toBe('failed');
     expect(merged?.pages[0].ocrText).toBeNull();
   });
@@ -317,7 +405,7 @@ describe('withPageOcrUpdate', () => {
     const content: DocumentContent = {
       pages: [persistedPage(), persistedPage({ pageNumber: 3 })],
     };
-    const merged = withPageOcrUpdate(content, persistedPage({ pageNumber: 2 }));
+    const merged = mergePageOcrUpdate(content, persistedPage({ pageNumber: 2 }));
     expect(merged?.pages.map((page) => page.pageNumber)).toEqual([1, 2, 3]);
   });
 });

@@ -19,11 +19,21 @@ defaults and a `set_updated_at` trigger).
 | `documents` | `id`, `owner_id`, `topic_id` → topics, `original_name`, `storage_path`, `mime_type`, `size`, `content`, `processing_status`, timestamps | `original_name` 1–255; `storage_path` 1–500; `mime_type = 'application/pdf'`; `size > 0` |
 
 `content` is a nullable `jsonb` column added by `0003_document_content.sql`:
-application-owned per-page extraction data (shape: `{ "pages": [ { "pageNumber",
-"nativeText", "quality", "ocrText", "ocrStatus" } ] }`), persisted so reopening a
-document reuses already extracted/OCR'd pages instead of re-processing them.
-`NULL` = not inspected yet. The original PDF in Storage remains the visual source
-of truth; no rendered images or PDF bytes are stored in the database.
+application-owned per-page extraction data, persisted so reopening a document
+reuses already extracted/OCR'd pages instead of re-processing them. The shape is
+exactly `{ "pages": [ { "pageNumber", "nativeText", "quality", "ocrText",
+"ocrStatus" } ] }` — the typed contract `Document → DocumentContent →
+PageContent[]` in `src/application/use-cases/documentContent.ts`. `nativeText`
+is the PDF text layer and is never overwritten by OCR; `ocrText` is the
+independent OCR output, `NULL` when no OCR result exists; `ocrStatus` is
+`not-generated` | `completed` | `failed`. Automatic processing extracts the
+native layer and runs OCR for every page, so fresh content carries both
+representations. `getDocumentPageText()` is the application-level entry point
+for future text-consuming features (search, summaries); the two representations
+are never merged. `NULL` = no persisted content yet (pre-migration or legacy
+rows): the viewer's inspect-on-open fallback re-runs the pipeline and persists
+the fresh result. The original PDF in Storage remains the visual source of
+truth; no rendered images or PDF bytes are stored in the database.
 
 `processing_status` is a `text` column added by `0004_document_processing.sql`
 (`pending` | `processing` | `completed` | `failed`, NOT NULL, default `pending`;

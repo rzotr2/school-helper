@@ -52,7 +52,7 @@ See `supabase-architecture.md` for the database schema, RLS policy matrix and St
 | `profiles` | `id` (→ auth.users), `created_at`, `updated_at` |
 | `subjects` | `id`, `owner_id`, `name`, `position`, timestamps |
 | `topics` | `id`, `owner_id`, `subject_id`, `name`, `position`, timestamps |
-| `documents` | `id`, `owner_id`, `topic_id`, `original_name`, `storage_path`, `mime_type`, `size`, timestamps |
+| `documents` | `id`, `owner_id`, `topic_id`, `original_name`, `storage_path`, `mime_type`, `size`, `content`, `processing_status`, timestamps |
 
 Storage path: `users/{userId}/documents/{documentId}.pdf` — it stays fixed when a document is renamed or moved.
 
