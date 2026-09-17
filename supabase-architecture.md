@@ -16,7 +16,21 @@ defaults and a `set_updated_at` trigger).
 | `profiles` | `id` → auth.users, timestamps | — |
 | `subjects` | `id`, `owner_id` → auth.users, `name`, `position`, timestamps | `name` 1–100 chars |
 | `topics` | `id`, `owner_id`, `subject_id` → subjects, `name`, `position`, timestamps | `name` 1–100 chars |
-| `documents` | `id`, `owner_id`, `topic_id` → topics, `original_name`, `storage_path`, `mime_type`, `size`, timestamps | `original_name` 1–255; `storage_path` 1–500; `mime_type = 'application/pdf'`; `size > 0` |
+| `documents` | `id`, `owner_id`, `topic_id` → topics, `original_name`, `storage_path`, `mime_type`, `size`, `content`, `processing_status`, timestamps | `original_name` 1–255; `storage_path` 1–500; `mime_type = 'application/pdf'`; `size > 0` |
+
+`content` is a nullable `jsonb` column added by `0003_document_content.sql`:
+application-owned per-page extraction data (shape: `{ "pages": [ { "pageNumber",
+"nativeText", "quality", "ocrText", "ocrStatus" } ] }`), persisted so reopening a
+document reuses already extracted/OCR'd pages instead of re-processing them.
+`NULL` = not inspected yet. The original PDF in Storage remains the visual source
+of truth; no rendered images or PDF bytes are stored in the database.
+
+`processing_status` is a `text` column added by `0004_document_processing.sql`
+(`pending` | `processing` | `completed` | `failed`, NOT NULL, default `pending`;
+pre-existing rows migrated to `completed`). Only `completed` documents can be
+opened; content and the `completed` status are written in one UPDATE, so a
+document is never openable without its extraction data. Processing runs in the
+browser; the persisted status is what survives reloads.
 
 All foreign keys cascade on delete: auth.users → profiles/subjects/topics/documents
 (by `owner_id`), subjects → topics, topics → documents.
@@ -75,6 +89,8 @@ Immutability BEFORE UPDATE triggers (second layer behind RLS):
 | Suite | Location | What it covers | Infrastructure |
 |---|---|---|---|
 | Unit tests | `src/application/use-cases/documents.test.ts` | `normalizeDocumentName` | none |
+| Unit tests | `src/application/use-cases/documentContent.test.ts` | persisted content parse/map/merge (pure functions) | none |
+| Unit tests | `src/application/use-cases/documentProcessing.test.ts` | processing lifecycle orchestration (mocked client + pipeline) | none |
 
 Security note: the SQL policy matrix above has been statically audited, and the
 anonymous deny-by-default behavior was runtime-verified against the hosted project.

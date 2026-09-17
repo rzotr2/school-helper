@@ -6,10 +6,13 @@
  * Presentation component — the parent owns everything application-level:
  * downloading, signed URLs, inspection/OCR and the PDFDocumentProxy
  * lifecycle. This component neither loads nor destroys documents and
- * contains no business logic. Annotation appearance is rendered by the
- * default pdf.js path (annotationMode: ENABLE).
+ * contains no business logic. Annotation appearances are painted by the
+ * default pdf.js path (annotationMode: ENABLE); the pdf.js annotation
+ * layer (annotationLayer.ts) presents the annotations themselves —
+ * interactive links, icons, popups — as DOM elements on the same
+ * viewport as the canvas.
  */
-import React, { useCallback, useEffect, useReducer, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
@@ -23,8 +26,11 @@ import {
   ZoomOut,
 } from 'lucide-react';
 import type { PDFDocumentProxy, RenderTask } from 'pdfjs-dist';
+import { renderPdfAnnotationLayer } from '../../../infrastructure/pdf/annotationLayer';
+import { PdfViewerLinkService } from '../../../infrastructure/pdf/pdfLinkService';
 import { renderPdfPage } from '../../../infrastructure/pdf/render';
 import type { PdfInspectionResult } from '../../../infrastructure/pdf/types';
+import './annotationLayer.css';
 import { Button } from '../Button';
 import {
   VIEWER_ZOOM_MAX,
@@ -33,7 +39,8 @@ import {
   fitPageZoom,
   fitWidthZoom,
   initialViewerState,
-  pageExtractionLabel,
+  ocrStatusMessage,
+  selectedPageText,
   viewerStateReducer,
 } from './viewerState';
 
@@ -46,6 +53,8 @@ export interface PdfViewerProps {
   downloadName: string;
   /** PDF bytes for the download action; used only to build an object URL. */
   downloadSource: Blob | ArrayBuffer | Uint8Array;
+  /** Runs explicit OCR for one page; the parent owns the operation. */
+  onRunOcr: (pageNumber: number) => void;
   /** Called when the user closes the viewer; navigation is the parent's job. */
   onClose: () => void;
 }
@@ -55,10 +64,12 @@ export function PdfViewer({
   inspection,
   downloadName,
   downloadSource,
+  onRunOcr,
   onClose,
 }: PdfViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const annotationLayerRef = useRef<HTMLDivElement | null>(null);
   const renderGenerationRef = useRef(0);
   // Whether the current zoom came from a fit action; only then does a
   // container resize re-apply the fit (manual zoom steps leave fit mode).
@@ -73,7 +84,20 @@ export function PdfViewer({
   );
   pageRef.current = state.page;
 
-  // A changed document resets the page and the render state.
+  // Link targets resolve through pdf.js's own link service, so internal
+  // destinations navigate exactly to the page the inspection pipeline
+  // reports and external URLs get the standard href/target/rel
+  // attributes (unsafe schemes are rendered inert, see pdfLinkService.ts).
+  const linkService = useMemo(
+    () =>
+      new PdfViewerLinkService(pdfDocument, (pageNumber) =>
+        dispatch({ type: 'SET_PAGE', page: pageNumber }),
+      ),
+    [pdfDocument],
+  );
+
+  // A changed document resets the page and the render state; the render
+  // effect's cleanup clears the old annotation layer.
   useEffect(() => {
     setRenderErrorMessage(null);
     dispatch({ type: 'SET_DOCUMENT', totalPages: pdfDocument.numPages });
@@ -91,6 +115,7 @@ export function PdfViewer({
     const pageNumber = state.page;
     const zoom = state.zoom;
     let renderTask: RenderTask | undefined;
+    let annotationController: AbortController | undefined;
     let cancelled = false;
 
     setRenderErrorMessage(null);
@@ -106,12 +131,31 @@ export function PdfViewer({
         canvas.style.width = `${cssViewport.width}px`;
         canvas.style.height = `${cssViewport.height}px`;
         renderTask = renderPdfPage(page, canvas, (zoom / 100) * devicePixelRatio);
+
+        // Present the page's annotations (links, icons, popups) on the
+        // same CSS viewport the canvas is sized with, so both stay aligned
+        // across page, zoom and document changes by construction. An
+        // annotation failure must never break the canvas render: the page
+        // stays visible without interactive annotations.
+        const annotationLayer = annotationLayerRef.current;
+        if (annotationLayer) {
+          annotationController = new AbortController();
+          renderPdfAnnotationLayer({
+            container: annotationLayer,
+            page,
+            viewport: cssViewport,
+            linkService,
+            signal: annotationController.signal,
+          }).catch(() => {
+            if (annotationController?.signal.aborted) return;
+          });
+        }
+
         await renderTask.promise;
         if (cancelled || generation !== renderGenerationRef.current) return;
         dispatch({ type: 'RENDER_DONE' });
       } catch (err) {
         if (cancelled || generation !== renderGenerationRef.current) return;
-        console.error(`Failed to render page ${pageNumber}`, err);
         setRenderErrorMessage(describeViewerError(err));
         dispatch({ type: 'RENDER_ERROR' });
       }
@@ -120,10 +164,14 @@ export function PdfViewer({
     return () => {
       cancelled = true;
       // Cancelling a render superseded by a page/zoom/document change is
-      // normal behavior, not an error.
+      // normal behavior, not an error. The aborted annotation render must
+      // not touch the DOM, and clearing the layer keeps the old page's
+      // annotations off the new page until its own layer is ready.
+      annotationController?.abort();
+      annotationLayerRef.current?.replaceChildren();
       renderTask?.cancel();
     };
-  }, [pdfDocument, state.page, state.zoom]);
+  }, [pdfDocument, state.page, state.zoom, linkService]);
 
   // Fit calculations live in viewerState.ts; the component only measures
   // the available viewport.
@@ -147,8 +195,8 @@ export function PdfViewer({
         // A stale fit (page changed while awaiting) must not change the zoom.
         if (pageRef.current !== pageNumber) return;
         dispatch({ type: 'SET_ZOOM', zoom });
-      } catch (err) {
-        console.error('Failed to fit page', err);
+      } catch {
+        // A stale fit measurement must not surface an error.
       }
     },
     [pdfDocument, state.page],
@@ -167,7 +215,8 @@ export function PdfViewer({
     return () => observer.disconnect();
   }, [applyFit]);
 
-  // Keyboard navigation. Form fields and modified shortcuts are left alone.
+  // Keyboard navigation. Form fields, modified shortcuts and focused
+  // annotation hotspots are left alone.
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const target = event.target;
@@ -176,7 +225,10 @@ export function PdfViewer({
         (target.tagName === 'INPUT' ||
           target.tagName === 'TEXTAREA' ||
           target.tagName === 'SELECT' ||
-          target.isContentEditable)
+          target.isContentEditable ||
+          // Arrow keys must not page-flip while a link hotspot has focus;
+          // interactive overlay elements handle their own keys.
+          target.closest('[data-pdf-annotation-layer]') !== null)
       ) {
         return;
       }
@@ -256,10 +308,17 @@ export function PdfViewer({
   };
 
   const currentPageInspection = inspection.pages.find((page) => page.pageNumber === state.page);
-  const currentPageText =
-    currentPageInspection !== undefined && currentPageInspection.text.trim() !== ''
-      ? currentPageInspection.text
+  const selectedText =
+    currentPageInspection === undefined
+      ? ''
+      : selectedPageText(currentPageInspection, state.textSource);
+  const ocrMessage =
+    state.textSource === 'ocr' && currentPageInspection !== undefined
+      ? ocrStatusMessage(currentPageInspection)
       : null;
+  const ocrRunning =
+    currentPageInspection?.ocrStatus === 'pending' ||
+    currentPageInspection?.ocrStatus === 'processing';
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white">
@@ -377,12 +436,23 @@ export function PdfViewer({
       {/* Canvas area */}
       <div ref={scrollContainerRef} className="relative min-h-0 flex-1 overflow-auto">
         <div className="flex min-h-full justify-center p-4">
-          <canvas
-            ref={canvasRef}
-            role="img"
-            aria-label={`Seite ${state.page}`}
-            className="bg-white shadow-sm"
-          />
+          <div className="relative self-start">
+            <canvas
+              ref={canvasRef}
+              role="img"
+              aria-label={`Seite ${state.page}`}
+              className="block bg-white shadow-sm"
+            />
+            {/* pdf.js annotation layer of the current page: interactive
+                links, annotation icons and content popups. Their visuals
+                are already painted by pdf.js on the canvas; the layer only
+                adds structure and interaction. */}
+            <div
+              ref={annotationLayerRef}
+              className="annotationLayer pdfAnnotationLayer"
+              data-pdf-annotation-layer
+            />
+          </div>
         </div>
         {state.renderState === 'rendering' && (
           <div className="absolute inset-0 flex items-center justify-center bg-white/70">
@@ -404,16 +474,57 @@ export function PdfViewer({
       {/* Extracted text of the current page only */}
       {state.textPanelOpen && (
         <div className="border-t border-slate-200 bg-slate-50">
-          <div className="flex items-center gap-2 px-4 pt-3">
+          <div className="flex flex-wrap items-center gap-2 px-4 pt-3">
             <span className="text-sm font-medium text-slate-900">Seite {state.page}</span>
-            {currentPageInspection !== undefined && (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">
-                {pageExtractionLabel(currentPageInspection.extractionMethod)}
-              </span>
-            )}
+            {/* Source selection: affects only the text below, never the
+                canvas rendering. Sticky across page changes. */}
+            <div
+              className="flex rounded-md border border-slate-200 bg-slate-100 p-0.5"
+              role="group"
+              aria-label="Textquelle"
+            >
+              <button
+                type="button"
+                className={`rounded px-2 py-1 text-xs cursor-pointer ${
+                  state.textSource === 'native'
+                    ? 'bg-white font-medium text-slate-900 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+                aria-pressed={state.textSource === 'native'}
+                onClick={() => dispatch({ type: 'SET_TEXT_SOURCE', source: 'native' })}
+              >
+                Textebene
+              </button>
+              <button
+                type="button"
+                className={`rounded px-2 py-1 text-xs cursor-pointer ${
+                  state.textSource === 'ocr'
+                    ? 'bg-white font-medium text-slate-900 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+                aria-pressed={state.textSource === 'ocr'}
+                onClick={() => dispatch({ type: 'SET_TEXT_SOURCE', source: 'ocr' })}
+              >
+                OCR
+              </button>
+            </div>
+            {/* Explicit OCR: allowed even when the native text is good —
+                both representations are independent. */}
+            {state.textSource === 'ocr' &&
+              currentPageInspection !== undefined &&
+              currentPageInspection.ocrText === null &&
+              !ocrRunning && (
+                <Button
+                  variant="secondary"
+                  className="h-7 px-2 py-1 text-xs"
+                  onClick={() => onRunOcr(state.page)}
+                >
+                  OCR für diese Seite ausführen
+                </Button>
+              )}
           </div>
           <pre className="m-4 mt-2 max-h-48 overflow-auto whitespace-pre-wrap rounded border border-slate-200 bg-white p-3 text-xs text-slate-700">
-            {currentPageText ?? 'Kein Text auf dieser Seite.'}
+            {ocrMessage ?? (selectedText.trim() === '' ? 'Kein Text auf dieser Seite.' : selectedText)}
           </pre>
         </div>
       )}

@@ -10,16 +10,15 @@ import React, { useRef, useState } from 'react';
 import { FileSearch, Loader2 } from 'lucide-react';
 import { PdfCancellationError, PdfInspectionError } from '../../infrastructure/pdf/errors';
 import { inspectPdf } from '../../infrastructure/pdf/inspect';
-import type {
-  PdfInspectionProgress,
-  PdfInspectionResult,
-} from '../../infrastructure/pdf/types';
+import type { OcrStatus, PdfInspectionProgress, PdfInspectionResult } from '../../infrastructure/pdf/types';
 import { Button } from '../components/Button';
 
-const METHOD_LABELS: Record<PdfInspectionResult['extractionMethod'], string> = {
-  'native-text': 'Textebene',
-  ocr: 'OCR',
-  mixed: 'Gemischt (Textebene + OCR)',
+const OCR_STATUS_LABELS: Record<OcrStatus, string> = {
+  'not-needed': 'OCR nicht nötig',
+  pending: 'OCR ausstehend',
+  processing: 'OCR läuft',
+  completed: 'OCR fertig',
+  failed: 'OCR fehlgeschlagen',
 };
 
 export function PdfInspectPage() {
@@ -126,16 +125,10 @@ export function PdfInspectPage() {
 
       {result && (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="p-4 bg-white border border-slate-200 rounded-lg">
               <p className="text-xs text-slate-500">Seiten</p>
               <p className="text-lg font-semibold text-slate-900">{result.pageCount}</p>
-            </div>
-            <div className="p-4 bg-white border border-slate-200 rounded-lg">
-              <p className="text-xs text-slate-500">Textmethode</p>
-              <p className="text-lg font-semibold text-slate-900">
-                {METHOD_LABELS[result.extractionMethod]}
-              </p>
             </div>
             <div className="p-4 bg-white border border-slate-200 rounded-lg">
               <p className="text-xs text-slate-500">Verwertbarer Text</p>
@@ -151,22 +144,30 @@ export function PdfInspectPage() {
               <div key={page.pageNumber} className="p-4 bg-white border border-slate-200 rounded-lg">
                 <div className="flex items-center gap-2 mb-2 flex-wrap">
                   <span className="font-medium text-slate-900">Seite {page.pageNumber}</span>
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">
-                    {page.extractionMethod === 'native-text' ? 'Textebene' : 'OCR'}
-                  </span>
                   <span
                     className={`text-xs px-2 py-0.5 rounded-full ${
                       page.quality.usable ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
                     }`}
                   >
                     {page.quality.usable
-                      ? 'verwertbar'
-                      : `nicht verwertbar: ${page.quality.reasons.join(', ')}`}
+                      ? 'Textebene verwertbar'
+                      : `Textebene nicht verwertbar: ${page.quality.reasons.join(', ')}`}
+                  </span>
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">
+                    {OCR_STATUS_LABELS[page.ocrStatus]}
                   </span>
                 </div>
                 <pre className="text-xs text-slate-700 bg-slate-50 rounded p-3 max-h-48 overflow-auto whitespace-pre-wrap">
-                  {page.text.trim() === '' ? '—' : page.text}
+                  {page.nativeText.trim() === '' ? '—' : page.nativeText}
                 </pre>
+                {page.ocrText !== null && (
+                  <>
+                    <p className="text-xs text-slate-500 mt-2 mb-1">OCR-Text</p>
+                    <pre className="text-xs text-slate-700 bg-slate-50 rounded p-3 max-h-48 overflow-auto whitespace-pre-wrap">
+                      {page.ocrText}
+                    </pre>
+                  </>
+                )}
               </div>
             ))}
           </section>

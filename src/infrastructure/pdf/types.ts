@@ -8,11 +8,19 @@ import type { ImageLike } from 'tesseract.js';
  * local worker. No PDF data ever leaves the device.
  */
 
-/** How the text of a single page was obtained. */
-export type PdfPageExtractionMethod = 'native-text' | 'ocr';
-
-/** Document-level summary of the extraction methods used. */
-export type PdfExtractionMethod = 'native-text' | 'ocr' | 'mixed';
+/**
+ * Lifecycle of the OCR representation of one page. Native text and OCR
+ * text are independent representations; this only tracks the OCR side.
+ *
+ * 'not-needed': no OCR output exists yet. Automatic processing always
+ * OCRs every page, so fresh inspections no longer produce this state — it
+ * only appears when persisted content without OCR ('not-generated', e.g.
+ * legacy documents) is restored for the viewer. It does NOT mean OCR is
+ * impossible — explicit OCR may still be requested. 'pending'/'processing'
+ * are transient: requested, then running. Only 'completed' and 'failed'
+ * are final.
+ */
+export type OcrStatus = 'not-needed' | 'pending' | 'processing' | 'completed' | 'failed';
 
 /** Result of the deterministic text-quality heuristic. */
 export interface TextQuality {
@@ -38,18 +46,22 @@ export interface TextQuality {
   reasons: string[];
 }
 
-/** Inspection result of one page. */
+/** Inspection result of one page: two independent text representations. */
 export interface PdfPageInspection {
   /** 1-based page number. */
   pageNumber: number;
-  /** The text kept for this page: native text layer or OCR output. */
-  text: string;
-  /** The raw native text layer ('' when the PDF has none). */
+  /**
+   * The extracted native text layer ('' when the PDF has none). Always
+   * preserved, even when unusable — OCR output is stored separately and
+   * never overwrites this.
+   */
   nativeText: string;
-  /** Quality evaluation of `text`. */
+  /** Quality evaluation of `nativeText` (never reassigned from OCR output). */
   quality: TextQuality;
-  /** How `text` was obtained. */
-  extractionMethod: PdfPageExtractionMethod;
+  /** OCR output for this page; null until OCR has produced any. */
+  ocrText: string | null;
+  /** Lifecycle of the OCR representation (see OcrStatus). */
+  ocrStatus: OcrStatus;
 }
 
 /** Position of an annotation on its page (PDF coordinates, origin bottom-left). */
@@ -76,6 +88,10 @@ export interface PdfAnnotation {
   content: string | null;
   /** Position on the page. */
   rect: PdfAnnotationRect | null;
+  /** External target of a link annotation, when the PDF exposes one. */
+  url: string | null;
+  /** Resolved 1-based page number of a link's internal destination, when it resolves. */
+  targetPageNumber: number | null;
 }
 
 /** Full result of the inspection pipeline. */
@@ -83,10 +99,17 @@ export interface PdfInspectionResult {
   pageCount: number;
   pages: PdfPageInspection[];
   annotations: PdfAnnotation[];
-  /** 'native-text' (no OCR), 'ocr' (every page OCR'd) or 'mixed'. */
-  extractionMethod: PdfExtractionMethod;
-  /** True when at least one page ended up with usable text. */
+  /** True when at least one page has usable native text or completed OCR. */
   hasUsableText: boolean;
+}
+
+/**
+ * The document-level "usable text" rule, shared by the pipeline and the
+ * UI's explicit-OCR updates: a page counts when its native text is usable
+ * or its OCR representation produced output.
+ */
+export function pagesHaveUsableText(pages: readonly PdfPageInspection[]): boolean {
+  return pages.some((page) => page.quality.usable || page.ocrStatus === 'completed');
 }
 
 export type PdfInspectionProgress =

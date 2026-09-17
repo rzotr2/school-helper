@@ -6,12 +6,11 @@ import { ocrPdfPages } from './ocr';
 import { evaluateTextQuality } from './textQuality';
 import type {
   PdfAnnotation,
-  PdfExtractionMethod,
   PdfInspectOptions,
   PdfInspectionResult,
-  PdfPageExtractionMethod,
   PdfPageInspection,
 } from './types';
+import { pagesHaveUsableText } from './types';
 
 /**
  * The fields of a pdf.js annotation object that inspection keeps. The
@@ -25,6 +24,13 @@ interface RawPdfAnnotation {
   /** pdf.js v6 exposes the contents as { str, dir } under contentsObj. */
   contentsObj?: unknown;
   rect?: unknown;
+  /** External URL of a link annotation (pdf.js: `url`). */
+  url?: unknown;
+  /**
+   * Internal destination of a link annotation (pdf.js: `dest`): a
+   * named-destination string or an explicit destination array.
+   */
+  dest?: unknown;
 }
 
 /** Numeric pdf.js annotation type -> name, via its AnnotationType table. */
@@ -50,11 +56,56 @@ function annotationContent(annotation: RawPdfAnnotation): string | null {
 }
 
 /**
+ * Resolves a link annotation's internal destination into a 1-based page
+ * number. Named destinations go through the document's name tree
+ * (getDestination); explicit destination arrays are used as-is. Anything
+ * that cannot be resolved yields null — annotation targets are an
+ * enrichment of the metadata, never a blocker for the pipeline.
+ *
+ * Exported for the viewer's link service (pdfLinkService.ts), which uses
+ * the same resolver so internal links navigate exactly to what the
+ * inspection pipeline reports.
+ */
+export async function resolveLinkTargetPage(
+  doc: PDFDocumentProxy,
+  dest: unknown,
+): Promise<number | null> {
+  let rawDestination: unknown = null;
+  try {
+    rawDestination =
+      typeof dest === 'string' ? await doc.getDestination(dest) : Array.isArray(dest) ? dest : null;
+  } catch {
+    return null;
+  }
+  if (rawDestination === null || !Array.isArray(rawDestination)) return null;
+
+  // An explicit destination starts with the page reference ({num, gen}).
+  const first: unknown = rawDestination[0];
+  if (typeof first !== 'object' || first === null) return null;
+  const num = (first as { num?: unknown }).num;
+  if (typeof num !== 'number') return null;
+  const gen = (first as { gen?: unknown }).gen;
+
+  try {
+    const pageIndex = await doc.getPageIndex({ num, gen: typeof gen === 'number' ? gen : 0 });
+    return Math.min(doc.numPages, Math.max(1, pageIndex + 1));
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Maps one raw pdf.js annotation. Note: pdf.js may normalize the rect (an
  * appearance-less Text annotation gets a small icon rect, highlights get
  * their QuadPoints bounding box) — the pipeline captures it as provided.
+ * Link annotations additionally carry their target: the external URL as
+ * given, or the internal destination resolved to a page number.
  */
-function mapAnnotation(pageNumber: number, annotation: RawPdfAnnotation): PdfAnnotation {
+async function mapAnnotation(
+  doc: PDFDocumentProxy,
+  pageNumber: number,
+  annotation: RawPdfAnnotation,
+): Promise<PdfAnnotation> {
   const rect =
     Array.isArray(annotation.rect) &&
     annotation.rect.length === 4 &&
@@ -66,45 +117,46 @@ function mapAnnotation(pageNumber: number, annotation: RawPdfAnnotation): PdfAnn
           height: annotation.rect[3] - annotation.rect[1],
         }
       : null;
+  const type =
+    typeof annotation.annotationType === 'number'
+      ? annotationTypeName(annotation.annotationType)
+      : 'UNKNOWN';
+  const url = typeof annotation.url === 'string' ? annotation.url : null;
+  // External links already have their URL; only internal links need page
+  // resolution (and a link carrying both keeps the external URL).
+  const targetPageNumber =
+    type === 'LINK' && url === null ? await resolveLinkTargetPage(doc, annotation.dest) : null;
   return {
     pageNumber,
-    type:
-      typeof annotation.annotationType === 'number'
-        ? annotationTypeName(annotation.annotationType)
-        : 'UNKNOWN',
+    type,
     subtype: typeof annotation.subtype === 'string' ? annotation.subtype : null,
     content: annotationContent(annotation),
     rect,
+    url,
+    targetPageNumber,
   };
-}
-
-/**
- * Document-level extraction method from the per-page methods.
- * Pure helper, exported for tests.
- */
-export function deriveExtractionMethod(
-  methods: readonly PdfPageExtractionMethod[],
-): PdfExtractionMethod {
-  const hasNativeText = methods.some((method) => method === 'native-text');
-  const hasOcr = methods.some((method) => method === 'ocr');
-  if (hasNativeText && hasOcr) return 'mixed';
-  if (hasOcr) return 'ocr';
-  return 'native-text';
 }
 
 /**
  * Inspects an already loaded PDF completely locally: extracts the native
  * text layer page by page, evaluates its quality with the deterministic
- * heuristic, collects per-page annotations, and OCRs the pages whose
- * native text is unusable.
+ * heuristic, collects per-page annotations, and OCRs every page.
+ *
+ * Every page carries its two text representations independently: the
+ * native text layer is always preserved (even when unusable), and OCR
+ * output is stored alongside it — it never overwrites nativeText, and the
+ * page quality always describes nativeText. Automatic OCR runs for every
+ * page regardless of the native quality, so a processed document always
+ * has both representations; pages whose OCR fails keep their native text
+ * and end with ocrStatus 'failed'.
  *
  * Does not own the document: the caller loads it (loadPdfDocument) and
  * releases it (releasePdfDocument), so one load can serve both the
  * inspection and page rendering.
  *
  * Rejections are always PdfInspectionError, or PdfCancellationError when
- * the signal aborts. Raw library errors are logged and mapped to messages
- * that are safe to show.
+ * the signal aborts. Raw library errors are mapped to messages that are
+ * safe to show.
  */
 export async function inspectPdfDocument(
   doc: PDFDocumentProxy,
@@ -123,8 +175,7 @@ export async function inspectPdfDocument(
       let page: PDFPageProxy;
       try {
         page = await doc.getPage(pageNumber);
-      } catch (err) {
-        console.error(`Failed to read page ${pageNumber}`, err);
+      } catch {
         throw new PdfInspectionError(`Failed to read page ${pageNumber}`);
       }
 
@@ -137,47 +188,61 @@ export async function inspectPdfDocument(
           nativeText += item.str;
           if (item.hasEOL) nativeText += '\n';
         }
-      } catch (err) {
-        console.error(`Text extraction failed on page ${pageNumber}`, err);
+      } catch {
         throw new PdfInspectionError(`Text extraction failed on page ${pageNumber}`);
       }
 
       try {
         const rawAnnotations = await page.getAnnotations({ intent: 'display' });
         for (const raw of rawAnnotations) {
-          annotations.push(mapAnnotation(pageNumber, raw));
+          try {
+            annotations.push(await mapAnnotation(doc, pageNumber, raw));
+          } catch {
+            // One bad annotation must not discard the others.
+          }
         }
-      } catch (err) {
+      } catch {
         // Annotation extraction must not block the rest of the pipeline:
-        // log and continue without annotation data for this page.
-        console.error(`Annotation extraction failed on page ${pageNumber}`, err);
+        // continue without annotation data for this page.
       }
 
+      // The native text is always kept, usable or not. The quality only
+      // describes the native representation — it never decides whether OCR
+      // runs: automatic processing OCRs every page, and the OCR result is
+      // an additional representation, never a replacement.
       const quality = evaluateTextQuality(nativeText);
-      pages.push(
-        quality.usable
-          ? { pageNumber, text: nativeText, nativeText, quality, extractionMethod: 'native-text' }
-          : { pageNumber, text: '', nativeText, quality, extractionMethod: 'ocr' },
-      );
+      pages.push({
+        pageNumber,
+        nativeText,
+        quality,
+        ocrText: null,
+        ocrStatus: 'pending',
+      });
     }
 
-    const ocrPageNumbers = pages
-      .filter((page) => page.extractionMethod === 'ocr')
-      .map((page) => page.pageNumber);
+    // Every page is OCRed — usable native text or not — so the finished
+    // document carries both representations for every page.
+    const ocrPageNumbers = pages.map((page) => page.pageNumber);
 
     if (ocrPageNumbers.length > 0) {
-      const ocrResults = await ocrPdfPages(doc, ocrPageNumbers, {
+      const ocrOutcome = await ocrPdfPages(doc, ocrPageNumbers, {
         language: options.ocrLanguage,
         signal,
         canvasFactory: options.ocrCanvasFactory,
-        onProgress: (currentPage, ocrPageCount) =>
-          onProgress?.({ phase: 'ocr', currentPage, pageCount, ocrPageCount }),
+        onProgress: (currentPage, ocrPageCount) => {
+          const page = pages.find((candidate) => candidate.pageNumber === currentPage);
+          if (page !== undefined) page.ocrStatus = 'processing';
+          onProgress?.({ phase: 'ocr', currentPage, pageCount, ocrPageCount });
+        },
       });
       for (const page of pages) {
-        const ocrResult = ocrResults.get(page.pageNumber);
+        const ocrResult = ocrOutcome.textByPage.get(page.pageNumber);
         if (ocrResult !== undefined) {
-          page.text = ocrResult.text;
-          page.quality = evaluateTextQuality(ocrResult.text);
+          page.ocrText = ocrResult.text;
+          page.ocrStatus = 'completed';
+        } else if (ocrOutcome.failedPages.has(page.pageNumber)) {
+          // The native text stays untouched; only the OCR side failed.
+          page.ocrStatus = 'failed';
         }
       }
     }
@@ -186,8 +251,7 @@ export async function inspectPdfDocument(
       pageCount,
       pages,
       annotations,
-      extractionMethod: deriveExtractionMethod(pages.map((page) => page.extractionMethod)),
-      hasUsableText: pages.some((page) => page.quality.usable),
+      hasUsableText: pagesHaveUsableText(pages),
     };
 }
 

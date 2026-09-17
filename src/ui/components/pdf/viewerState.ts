@@ -5,7 +5,12 @@
  * browser. The PdfViewer component owns canvas elements, render tasks and
  * AbortControllers — this module only holds numbers, booleans and labels.
  */
-import type { PdfPageExtractionMethod } from '../../../infrastructure/pdf/types';
+import {
+  pagesHaveUsableText,
+  type OcrStatus,
+  type PdfPageInspection,
+  type PdfInspectionResult,
+} from '../../../infrastructure/pdf/types';
 import { PdfCancellationError, PdfInspectionError } from '../../../infrastructure/pdf/errors';
 
 // ── Zoom ────────────────────────────────────────────────────────────────────
@@ -86,15 +91,63 @@ export function fitPageZoom(
   );
 }
 
-// ── Labels ──────────────────────────────────────────────────────────────────
+// ── Text sources ────────────────────────────────────────────────────────────
+
+/** Which text representation the text panel shows. */
+export type TextSource = 'native' | 'ocr';
+
+/** The German label of a text source for the segmented control. */
+export function textSourceLabel(source: TextSource): string {
+  return source === 'native' ? 'Textebene' : 'OCR';
+}
 
 /**
- * German UI label for how the text of one page was obtained. Page-specific
- * on purpose: mixed documents get a per-page label, never a document-level
- * "mixed" string.
+ * The text of the selected representation. An OCR page without output
+ * yields '' — the panel shows the German ocrStatusMessage instead.
  */
-export function pageExtractionLabel(method: PdfPageExtractionMethod): string {
-  return method === 'native-text' ? 'Textebene' : 'OCR';
+export function selectedPageText(page: PdfPageInspection, source: TextSource): string {
+  return source === 'native' ? page.nativeText : (page.ocrText ?? '');
+}
+
+/**
+ * German message for the OCR side of the text panel when no OCR text
+ * exists; null when the page has OCR text (nothing to explain). The
+ * not-needed message deliberately does not say "impossible": explicit OCR
+ * can still be requested from that state.
+ */
+export function ocrStatusMessage(page: PdfPageInspection): string | null {
+  if (page.ocrText !== null) return null;
+  switch (page.ocrStatus) {
+    case 'pending':
+    case 'processing':
+      return 'OCR wird verarbeitet…';
+    case 'failed':
+      return 'OCR konnte für diese Seite nicht verarbeitet werden.';
+    case 'not-needed':
+    case 'completed':
+      return 'OCR noch nicht verfügbar.';
+    default: {
+      // Exhaustiveness check: a new OcrStatus member must be handled above.
+      const exhaustive: never = page.ocrStatus;
+      return exhaustive;
+    }
+  }
+}
+
+/**
+ * Immutable update of one page's OCR representation (explicit OCR
+ * lifecycle in the viewer). Recomputes hasUsableText so a page whose
+ * native text is unusable becomes "usable" once its OCR completes.
+ */
+export function withPageOcrUpdate(
+  inspection: PdfInspectionResult,
+  pageNumber: number,
+  update: { ocrStatus: OcrStatus; ocrText?: string | null },
+): PdfInspectionResult {
+  const pages = inspection.pages.map((page) =>
+    page.pageNumber === pageNumber ? { ...page, ...update } : page,
+  );
+  return { ...inspection, pages, hasUsableText: pagesHaveUsableText(pages) };
 }
 
 // ── Errors ──────────────────────────────────────────────────────────────────
@@ -147,6 +200,8 @@ export interface ViewerState {
   zoom: number;
   /** Whether the extracted-text panel is visible. */
   textPanelOpen: boolean;
+  /** Which text representation the text panel shows (sticky across pages). */
+  textSource: TextSource;
   /** Render/loading state of the current page. */
   renderState: ViewerRenderState;
 }
@@ -158,13 +213,21 @@ export type ViewerAction =
   | { type: 'SET_ZOOM'; zoom: number }
   | { type: 'STEP_ZOOM'; direction: 1 | -1 }
   | { type: 'SET_TEXT_PANEL'; open: boolean }
+  | { type: 'SET_TEXT_SOURCE'; source: TextSource }
   | { type: 'RENDER_START' }
   | { type: 'RENDER_DONE' }
   | { type: 'RENDER_ERROR' }
   | { type: 'ABORT' };
 
 export function initialViewerState(): ViewerState {
-  return { page: 1, totalPages: 0, zoom: 100, textPanelOpen: false, renderState: 'idle' };
+  return {
+    page: 1,
+    totalPages: 0,
+    zoom: 100,
+    textPanelOpen: false,
+    textSource: 'native',
+    renderState: 'idle',
+  };
 }
 
 /**
@@ -188,6 +251,8 @@ export function viewerStateReducer(state: ViewerState, action: ViewerAction): Vi
       return { ...state, zoom: stepZoom(state.zoom, action.direction) };
     case 'SET_TEXT_PANEL':
       return { ...state, textPanelOpen: action.open };
+    case 'SET_TEXT_SOURCE':
+      return { ...state, textSource: action.source };
     case 'RENDER_START':
       return { ...state, renderState: 'rendering' };
     case 'RENDER_DONE':

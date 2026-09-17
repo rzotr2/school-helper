@@ -1,5 +1,10 @@
 import { supabase } from '../../infrastructure/supabase/client';
-import type { Database } from '../../infrastructure/supabase/database.types';
+import type {
+  Database,
+  DocumentProcessingStatus,
+  Json,
+} from '../../infrastructure/supabase/database.types';
+import { parseDocumentContent, parseProcessingStatus, type DocumentContent } from './documentContent';
 
 export interface Document {
   id: string;
@@ -11,6 +16,18 @@ export interface Document {
   size: number;
   createdAt: Date;
   updatedAt: Date;
+  /**
+   * Persisted per-page extraction data (nativeText + ocrText), null when
+   * the document has none yet. Only downloadDocument selects this column;
+   * the list queries (getAllDocuments/getDocumentsForTopic) omit it and
+   * therefore report null here.
+   */
+  content: DocumentContent | null;
+  /**
+   * Persisted processing lifecycle (see DocumentProcessingStatus). Only
+   * 'completed' documents can be opened; every other state offers a retry.
+   */
+  processingStatus: DocumentProcessingStatus;
 }
 
 export const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
@@ -18,7 +35,10 @@ export const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
 type DocumentRow = Database['public']['Tables']['documents']['Row'];
 
 const DOCUMENT_COLUMNS =
-  'id, owner_id, topic_id, original_name, storage_path, mime_type, size, created_at, updated_at';
+  'id, owner_id, topic_id, original_name, storage_path, mime_type, size, created_at, updated_at, processing_status';
+
+/** List columns plus the (potentially large) persisted content column. */
+const DOCUMENT_COLUMNS_WITH_CONTENT = `${DOCUMENT_COLUMNS}, content`;
 
 function mapDocument(row: DocumentRow): Document {
   return {
@@ -31,6 +51,12 @@ function mapDocument(row: DocumentRow): Document {
     size: row.size,
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at),
+    // List queries do not select `content` (undefined here) — parse
+    // returns null, matching "no persisted content selected".
+    content: parseDocumentContent(row.content),
+    // Unknown or absent values fall back to 'pending' (the database
+    // default): the document shows as unprocessed and can be retried.
+    processingStatus: parseProcessingStatus(row.processing_status) ?? 'pending',
   };
 }
 
@@ -234,9 +260,11 @@ export async function downloadDocument(
 
   // Ownership-safe metadata query: RLS hides rows owned by others, so
   // absence of the row is indistinguishable from "another user's document".
+  // Content is selected here (and only here) so the viewer can reuse
+  // persisted extraction data instead of re-inspecting the PDF.
   const { data: row, error: fetchError } = await supabase
     .from('documents')
-    .select(DOCUMENT_COLUMNS)
+    .select(DOCUMENT_COLUMNS_WITH_CONTENT)
     .eq('id', documentId)
     .maybeSingle();
 
@@ -251,6 +279,43 @@ export async function downloadDocument(
   }
 
   return { document: mapDocument(row), blob: await response.blob() };
+}
+
+/**
+ * Persists one processing lifecycle transition and returns the real
+ * database row. A 'completed' transition must carry the freshly extracted
+ * content — content and status are written in ONE update, so a document
+ * can never be openable while its extraction data is still missing.
+ *
+ * RLS restricts the write to the owner's own row (the update policy's
+ * topic-ownership check still passes because topic_id is not changed),
+ * and documents_check_immutable does not list processing_status/content.
+ */
+export async function updateDocumentProcessing(
+  userId: string,
+  documentId: string,
+  update: { processingStatus: DocumentProcessingStatus; content?: DocumentContent },
+): Promise<Document> {
+  if (!userId) throw new Error('User must be authenticated');
+
+  // The content column is always selected: the row is a single document,
+  // and a conditional select string would make the response type a union
+  // that mapDocument cannot accept.
+  const { data: row, error } = await supabase
+    .from('documents')
+    .update({
+      processing_status: update.processingStatus,
+      ...(update.content === undefined
+        ? {}
+        : { content: update.content as unknown as Json }),
+    })
+    .eq('id', documentId)
+    .select(DOCUMENT_COLUMNS_WITH_CONTENT)
+    .single();
+
+  if (error) throw new Error(error.message);
+
+  return mapDocument(row);
 }
 
 export function normalizeDocumentName(name: string): string {

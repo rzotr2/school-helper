@@ -1,14 +1,17 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { FileText, Loader2, ExternalLink, Trash2, Search, AlertCircle, X, Edit2, FolderInput } from 'lucide-react';
+import { FileText, Loader2, ExternalLink, Trash2, Search, AlertCircle, X, Edit2, FolderInput, RefreshCw } from 'lucide-react';
 import { useAuth } from '../../infrastructure/auth/AuthContext';
 import { Document, getAllDocuments } from '../../application/use-cases/documents';
+import { canOpenDocument } from '../../application/use-cases/documentContent';
 import { Subject, getSubjects } from '../../application/use-cases/subjects';
 import { Topic, getAllTopics } from '../../application/use-cases/topics';
 import { NameDialog } from '../components/NameDialog';
 import { MoveDocumentDialog } from '../components/MoveDocumentDialog';
 import { DeleteDialog } from '../components/DeleteDialog';
 import { useDocumentActions } from '../hooks/useDocumentActions';
+import { useDocumentProcessing } from '../hooks/useDocumentProcessing';
 import { formatFileSize } from '../../shared/utils/format';
+import { cn } from '../../shared/utils/cn';
 
 function formatDate(val: Date | null | undefined): string {
   if (!val) return 'Unbekanntes Datum';
@@ -42,6 +45,10 @@ export function Home() {
     handleRenameDocument,
     handleMoveDocument,
   } = useDocumentActions(user?.id, setDocuments);
+
+  // Automatic processing (extraction + OCR) runs per document; the hook
+  // tracks the in-flight runs of this session and updates the list state.
+  const { processingProgress, startProcessing } = useDocumentProcessing(user?.id, setDocuments);
 
   // Filters
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>('all');
@@ -265,6 +272,9 @@ export function Home() {
             const subject = topic ? subjectsMap.get(topic.subjectId) : undefined;
             const subjectName = subject?.name ?? 'Unbekanntes Fach';
             const topicName = topic?.name ?? 'Unbekanntes Thema';
+            const isOpenable = canOpenDocument(doc.processingStatus);
+            const progressText = processingProgress.get(doc.id);
+            const isProcessing = progressText !== undefined;
 
             return (
               <div
@@ -272,14 +282,21 @@ export function Home() {
                 className="group flex items-center justify-between p-4 bg-white border border-slate-200 rounded-lg shadow-2xs hover:border-slate-300 transition-all"
               >
                 <button
-                  onClick={() => handleOpenDocument(doc.id)}
-                  className="flex items-center gap-3.5 flex-1 min-w-0 text-left hover:text-blue-600 transition-colors cursor-pointer"
+                  onClick={() => isOpenable && handleOpenDocument(doc.id)}
+                  disabled={!isOpenable}
+                  className={cn(
+                    "flex items-center gap-3.5 flex-1 min-w-0 text-left transition-colors",
+                    isOpenable ? "hover:text-blue-600 cursor-pointer" : "cursor-default"
+                  )}
                 >
                   <div className="w-9 h-9 rounded-lg bg-red-50 text-red-600 flex items-center justify-center shrink-0">
                     <FileText className="w-5 h-5" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="font-medium text-slate-900 truncate group-hover:text-blue-600 transition-colors">
+                    <p className={cn(
+                      "font-medium text-slate-900 truncate transition-colors",
+                      isOpenable && "group-hover:text-blue-600"
+                    )}>
                       {doc.originalName}
                     </p>
                     <p className="text-xs text-slate-500 mt-0.5 truncate">
@@ -287,18 +304,55 @@ export function Home() {
                       <span className="mx-1.5 text-slate-300">·</span>
                       <span>{topicName}</span>
                     </p>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      {formatFileSize(doc.size)}
-                      <span className="mx-1.5 text-slate-300">·</span>
-                      {formatDate(doc.createdAt)}
-                    </p>
+                    {isProcessing ? (
+                      <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1.5">
+                        <Loader2 className="w-3 h-3 shrink-0 animate-spin" />
+                        <span className="truncate">{progressText || 'Wird verarbeitet…'}</span>
+                      </p>
+                    ) : doc.processingStatus === 'failed' ? (
+                      <p className="text-xs text-red-600 mt-0.5 flex items-center gap-1.5">
+                        <AlertCircle className="w-3 h-3 shrink-0" />
+                        Verarbeitung fehlgeschlagen
+                      </p>
+                    ) : isOpenable ? (
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        {formatFileSize(doc.size)}
+                        <span className="mx-1.5 text-slate-300">·</span>
+                        {formatDate(doc.createdAt)}
+                      </p>
+                    ) : doc.processingStatus === 'processing' ? (
+                      // A persisted 'processing' row with no live run in this
+                      // session: the browser run that started it is gone
+                      // (reload). Show the recovery state instead of
+                      // pretending the job is still running.
+                      <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1.5">
+                        <AlertCircle className="w-3 h-3 shrink-0" />
+                        Verarbeitung unterbrochen
+                      </p>
+                    ) : (
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Verarbeitung ausstehend
+                      </p>
+                    )}
                   </div>
                 </button>
 
                 <div className="flex items-center gap-1.5 ml-4 shrink-0">
+                  {!isOpenable && (
+                    <button
+                      onClick={() => void startProcessing(doc.id)}
+                      disabled={isProcessing}
+                      className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors disabled:opacity-50 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                      title="Verarbeitung wiederholen"
+                      aria-label="Verarbeitung wiederholen"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                    </button>
+                  )}
                   <button
-                    onClick={() => handleOpenDocument(doc.id)}
-                    className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                    onClick={() => isOpenable && handleOpenDocument(doc.id)}
+                    disabled={!isOpenable}
+                    className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors disabled:opacity-50 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
                     title="Öffnen"
                     aria-label="Öffnen"
                   >

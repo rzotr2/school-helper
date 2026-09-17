@@ -15,7 +15,10 @@ import { PdfInspectionError } from './errors';
 // same-origin module worker. In Node the URL is left unset: pdf.js runs
 // its fake worker there, and the '?url' string Vitest produces is not
 // importable by Node (the fake-worker loader imports workerSrc verbatim).
-if (typeof window !== 'undefined') {
+// jsdom (Vitest's DOM environment) has a window but is Node, so the
+// browser gate must not apply to it.
+const isJsdom = typeof navigator !== 'undefined' && navigator.userAgent.includes('jsdom');
+if (typeof window !== 'undefined' && !isJsdom) {
   pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 }
 
@@ -58,13 +61,12 @@ export async function loadPdfDocument(
   let doc: PDFDocumentProxy;
   try {
     doc = await task.promise;
-  } catch (err) {
-    console.error('Failed to load PDF', err);
+  } catch {
     // Release the failed task too, so an invalid PDF does not leak a worker.
     try {
       await task.destroy();
-    } catch (destroyErr) {
-      console.error('Failed to release the PDF document', destroyErr);
+    } catch {
+      // A failed destroy of an already-failed task is unrecoverable.
     }
     throw new PdfInspectionError('Invalid PDF file');
   }
@@ -73,13 +75,13 @@ export async function loadPdfDocument(
 }
 
 /**
- * Destroys a loaded PDF document (worker and document). Never throws: a
- * failed release is logged, because there is nothing a caller could do.
+ * Destroys a loaded PDF document (worker and document). Never throws:
+ * there is nothing a caller could do with a failed release.
  */
 export async function releasePdfDocument(task: PDFDocumentLoadingTask): Promise<void> {
   try {
     await task.destroy();
-  } catch (err) {
-    console.error('Failed to release the PDF document', err);
+  } catch {
+    // Nothing a caller could do with a failed release.
   }
 }

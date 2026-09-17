@@ -9,11 +9,46 @@ import {
   fitPageZoom,
   fitWidthZoom,
   initialViewerState,
-  pageExtractionLabel,
+  ocrStatusMessage,
+  selectedPageText,
   stepZoom,
+  textSourceLabel,
   viewerStateReducer,
+  withPageOcrUpdate,
 } from './viewerState';
 import { PdfCancellationError, PdfInspectionError } from '../../../infrastructure/pdf/errors';
+import {
+  pagesHaveUsableText,
+  type PdfPageInspection,
+  type PdfInspectionResult,
+  type TextQuality,
+} from '../../../infrastructure/pdf/types';
+
+const USABLE_QUALITY: TextQuality = {
+  usable: true,
+  charCount: 11,
+  printableRatio: 1,
+  whitespaceRatio: 0.091,
+  alphanumericRatio: 0.909,
+  wordCount: 2,
+  replacementCharCount: 0,
+  reasons: [],
+};
+
+function pageFixture(overrides: Partial<PdfPageInspection> = {}): PdfPageInspection {
+  return {
+    pageNumber: 1,
+    nativeText: 'Hallo Welt!',
+    quality: USABLE_QUALITY,
+    ocrText: null,
+    ocrStatus: 'not-needed',
+    ...overrides,
+  };
+}
+
+function inspectionFixture(pages: PdfPageInspection[]): PdfInspectionResult {
+  return { pageCount: pages.length, pages, annotations: [], hasUsableText: pagesHaveUsableText(pages) };
+}
 
 describe('clampPage', () => {
   it('clamps values below the minimum to page 1', () => {
@@ -109,13 +144,79 @@ describe('fit calculations', () => {
   });
 });
 
-describe('pageExtractionLabel', () => {
-  it('labels native text pages', () => {
-    expect(pageExtractionLabel('native-text')).toBe('Textebene');
+describe('text sources', () => {
+  it('labels the sources for the segmented control', () => {
+    expect(textSourceLabel('native')).toBe('Textebene');
+    expect(textSourceLabel('ocr')).toBe('OCR');
   });
 
-  it('labels OCR pages', () => {
-    expect(pageExtractionLabel('ocr')).toBe('OCR');
+  it('selectedPageText returns the selected representation', () => {
+    const page = pageFixture({ ocrText: 'erkannt', ocrStatus: 'completed' });
+    expect(selectedPageText(page, 'native')).toBe('Hallo Welt!');
+    expect(selectedPageText(page, 'ocr')).toBe('erkannt');
+    // OCR without output yields '' — the panel shows the status message.
+    expect(selectedPageText(pageFixture(), 'ocr')).toBe('');
+  });
+
+  it('explains the OCR states in German when no OCR text exists', () => {
+    expect(ocrStatusMessage(pageFixture())).toBe('OCR noch nicht verfügbar.');
+    expect(ocrStatusMessage(pageFixture({ ocrStatus: 'pending' }))).toBe('OCR wird verarbeitet…');
+    expect(ocrStatusMessage(pageFixture({ ocrStatus: 'processing' }))).toBe('OCR wird verarbeitet…');
+    expect(ocrStatusMessage(pageFixture({ ocrStatus: 'failed' }))).toBe(
+      'OCR konnte für diese Seite nicht verarbeitet werden.',
+    );
+  });
+
+  it('stays silent when OCR text exists', () => {
+    expect(ocrStatusMessage(pageFixture({ ocrStatus: 'completed', ocrText: 'erkannt' }))).toBeNull();
+  });
+
+  it('withPageOcrUpdate updates only the target page and recomputes hasUsableText', () => {
+    const inspection = inspectionFixture([pageFixture(), pageFixture({ pageNumber: 2 })]);
+    const updated = withPageOcrUpdate(inspection, 1, { ocrStatus: 'completed', ocrText: 'erkannt' });
+    expect(updated.pages[0]).toEqual({
+      ...pageFixture(),
+      ocrStatus: 'completed',
+      ocrText: 'erkannt',
+    });
+    expect(updated.pages[1]).toEqual(pageFixture({ pageNumber: 2 }));
+    expect(updated.hasUsableText).toBe(true);
+  });
+
+  it('completes explicit OCR on a good-native page without changing the native side', () => {
+    // TEST 3, unit level: OCR requested although the native text is good.
+    const good = pageFixture();
+    expect(good.ocrStatus).toBe('not-needed');
+    const updated = withPageOcrUpdate(inspectionFixture([good]), 1, {
+      ocrStatus: 'completed',
+      ocrText: 'zusätzlicher OCR-Text',
+    });
+    expect(updated.pages[0]?.ocrText).toBe('zusätzlicher OCR-Text');
+    expect(updated.pages[0]?.ocrStatus).toBe('completed');
+    expect(updated.pages[0]?.nativeText).toBe('Hallo Welt!');
+    expect(updated.pages[0]?.quality).toBe(USABLE_QUALITY);
+  });
+
+  it('marks an unusable-native page usable once its OCR completes', () => {
+    const unusable = pageFixture({ quality: { ...USABLE_QUALITY, usable: false } });
+    expect(inspectionFixture([unusable]).hasUsableText).toBe(false);
+    const updated = withPageOcrUpdate(inspectionFixture([unusable]), 1, {
+      ocrStatus: 'completed',
+      ocrText: 'erkannt',
+    });
+    expect(updated.hasUsableText).toBe(true);
+  });
+
+  it('leaves failed OCR without usable text but keeps the native side', () => {
+    const updated = withPageOcrUpdate(
+      inspectionFixture([pageFixture({ quality: { ...USABLE_QUALITY, usable: false } })]),
+      1,
+      { ocrStatus: 'failed' },
+    );
+    expect(updated.pages[0]?.ocrStatus).toBe('failed');
+    expect(updated.pages[0]?.ocrText).toBeNull();
+    expect(updated.pages[0]?.nativeText).toBe('Hallo Welt!');
+    expect(updated.hasUsableText).toBe(false);
   });
 });
 
@@ -168,6 +269,7 @@ describe('viewerStateReducer', () => {
       totalPages: 0,
       zoom: 100,
       textPanelOpen: false,
+      textSource: 'native',
       renderState: 'idle',
     });
   });
@@ -227,6 +329,17 @@ describe('viewerStateReducer', () => {
     expect(
       viewerStateReducer(initialViewerState(), { type: 'SET_TEXT_PANEL', open: true }).textPanelOpen,
     ).toBe(true);
+  });
+
+  it('SET_TEXT_SOURCE switches the source and stays sticky across page changes', () => {
+    const withDoc = viewerStateReducer(initialViewerState(), { type: 'SET_DOCUMENT', totalPages: 3 });
+    const onOcr = viewerStateReducer(withDoc, { type: 'SET_TEXT_SOURCE', source: 'ocr' });
+    expect(onOcr.textSource).toBe('ocr');
+    const pageTwo = viewerStateReducer(onOcr, { type: 'SET_PAGE', page: 2 });
+    expect(pageTwo.textSource).toBe('ocr');
+    expect(
+      viewerStateReducer(pageTwo, { type: 'SET_TEXT_SOURCE', source: 'native' }).textSource,
+    ).toBe('native');
   });
 
   it('walks through the render lifecycle', () => {

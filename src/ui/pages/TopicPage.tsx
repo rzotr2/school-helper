@@ -1,13 +1,16 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Loader2, ChevronRight, Folder, FileText, Upload, Trash2, ExternalLink, Edit2, FolderInput, AlertCircle, X } from 'lucide-react';
+import { Loader2, ChevronRight, Folder, FileText, Upload, Trash2, ExternalLink, Edit2, FolderInput, AlertCircle, X, RefreshCw } from 'lucide-react';
 import { Button } from '../components/Button';
 import { NameDialog } from '../components/NameDialog';
 import { MoveDocumentDialog } from '../components/MoveDocumentDialog';
 import { DeleteDialog } from '../components/DeleteDialog';
 import { Document, getDocumentsForTopic, uploadDocument } from '../../application/use-cases/documents';
+import { canOpenDocument } from '../../application/use-cases/documentContent';
 import { useDocumentActions } from '../hooks/useDocumentActions';
+import { useDocumentProcessing } from '../hooks/useDocumentProcessing';
 import { formatFileSize } from '../../shared/utils/format';
+import { cn } from '../../shared/utils/cn';
 import { useAuth } from '../../infrastructure/auth/AuthContext';
 import { Subject, getSubjects } from '../../application/use-cases/subjects';
 import { Topic, getTopic, getAllTopics } from '../../application/use-cases/topics';
@@ -46,6 +49,10 @@ export function TopicPage() {
     handleRenameDocument,
     handleMoveDocument,
   } = useDocumentActions(user?.id, setDocuments, { currentTopicId: topicId });
+
+  // Automatic processing (extraction + OCR) runs per document; the hook
+  // tracks the in-flight runs of this session and updates the list state.
+  const { processingProgress, startProcessing } = useDocumentProcessing(user?.id, setDocuments);
 
   useEffect(() => {
     const loadData = async () => {
@@ -105,6 +112,9 @@ export function TopicPage() {
         (progress) => setUploadProgress(Math.round(progress))
       );
       setDocuments(prev => [newDoc, ...prev]);
+      // Processing starts automatically in this session; the persisted
+      // 'pending'/'processing' status keeps the row busy across reloads.
+      void startProcessing(newDoc.id);
     } catch (err: unknown) {
       setUploadError(err instanceof Error ? err.message || 'Fehler beim Hochladen' : 'Fehler beim Hochladen');
     } finally {
@@ -219,69 +229,119 @@ export function TopicPage() {
         </div>
       ) : (
         <div className="grid gap-3">
-          {documents.map((doc) => (
-            <div 
-              key={doc.id}
-              className="group flex items-center justify-between p-4 bg-white border border-slate-200 rounded-lg shadow-sm hover:border-slate-300 transition-all"
-            >
-              <button 
-                onClick={() => handleOpenDocument(doc.id)}
-                className="flex items-center gap-3 flex-1 min-w-0 text-left hover:text-blue-600 transition-colors"
+          {documents.map((doc) => {
+            const isOpenable = canOpenDocument(doc.processingStatus);
+            const progressText = processingProgress.get(doc.id);
+            const isProcessing = progressText !== undefined;
+
+            return (
+              <div
+                key={doc.id}
+                className="group flex items-center justify-between p-4 bg-white border border-slate-200 rounded-lg shadow-sm hover:border-slate-300 transition-all"
               >
-                <div className="w-8 h-8 rounded bg-red-50 text-red-600 flex items-center justify-center shrink-0">
-                  <FileText className="w-4 h-4" />
-                </div>
-                <div className="min-w-0">
-                  <p className="font-medium text-slate-900 truncate group-hover:text-blue-600 transition-colors">
-                    {doc.originalName}
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    {formatFileSize(doc.size)} &middot; {doc.createdAt.toLocaleDateString('de-DE')}
-                  </p>
-                </div>
-              </button>
-              
-              <div className="flex items-center gap-1.5 ml-4 shrink-0">
                 <button
-                  onClick={() => handleOpenDocument(doc.id)}
-                  className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
-                  title="Öffnen"
-                  aria-label="Öffnen"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => setRenamingDoc(doc)}
-                  className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
-                  title="Umbenennen"
-                  aria-label="Umbenennen"
-                >
-                  <Edit2 className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => setMovingDoc(doc)}
-                  className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
-                  title="Verschieben"
-                  aria-label="Verschieben"
-                >
-                  <FolderInput className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => setDocToDelete(doc)}
-                  disabled={deletingDocId === doc.id}
-                  className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors disabled:opacity-50 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
-                  title="Löschen"
-                  aria-label="Löschen"
-                >
-                  {deletingDocId === doc.id ? (
-                    <Loader2 className="w-4 h-4 animate-spin text-red-600" />
-                  ) : (
-                    <Trash2 className="w-4 h-4" />
+                  onClick={() => isOpenable && handleOpenDocument(doc.id)}
+                  disabled={!isOpenable}
+                  className={cn(
+                    "flex items-center gap-3 flex-1 min-w-0 text-left transition-colors",
+                    isOpenable ? "hover:text-blue-600 cursor-pointer" : "cursor-default"
                   )}
+                >
+                  <div className="w-8 h-8 rounded bg-red-50 text-red-600 flex items-center justify-center shrink-0">
+                    <FileText className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className={cn(
+                      "font-medium text-slate-900 truncate transition-colors",
+                      isOpenable && "group-hover:text-blue-600"
+                    )}>
+                      {doc.originalName}
+                    </p>
+                    {isProcessing ? (
+                      <p className="text-xs text-slate-500 flex items-center gap-1.5">
+                        <Loader2 className="w-3 h-3 shrink-0 animate-spin" />
+                        <span className="truncate">{progressText || 'Wird verarbeitet…'}</span>
+                      </p>
+                    ) : doc.processingStatus === 'failed' ? (
+                      <p className="text-xs text-red-600 flex items-center gap-1.5">
+                        <AlertCircle className="w-3 h-3 shrink-0" />
+                        Verarbeitung fehlgeschlagen
+                      </p>
+                    ) : isOpenable ? (
+                      <p className="text-xs text-slate-500">
+                        {formatFileSize(doc.size)} &middot; {doc.createdAt.toLocaleDateString('de-DE')}
+                      </p>
+                    ) : doc.processingStatus === 'processing' ? (
+                      // A persisted 'processing' row with no live run in this
+                      // session: the browser run that started it is gone
+                      // (reload). Show the recovery state instead of
+                      // pretending the job is still running.
+                      <p className="text-xs text-slate-500 flex items-center gap-1.5">
+                        <AlertCircle className="w-3 h-3 shrink-0" />
+                        Verarbeitung unterbrochen
+                      </p>
+                    ) : (
+                      <p className="text-xs text-slate-500">
+                        Verarbeitung ausstehend
+                      </p>
+                    )}
+                  </div>
                 </button>
+
+                <div className="flex items-center gap-1.5 ml-4 shrink-0">
+                  {!isOpenable && (
+                    <button
+                      onClick={() => void startProcessing(doc.id)}
+                      disabled={isProcessing}
+                      className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors disabled:opacity-50 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                      title="Verarbeitung wiederholen"
+                      aria-label="Verarbeitung wiederholen"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                    </button>
+                  )}
+                  <button
+                    onClick={() => isOpenable && handleOpenDocument(doc.id)}
+                    disabled={!isOpenable}
+                    className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors disabled:opacity-50 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                    title="Öffnen"
+                    aria-label="Öffnen"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setRenamingDoc(doc)}
+                    className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                    title="Umbenennen"
+                    aria-label="Umbenennen"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setMovingDoc(doc)}
+                    className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                    title="Verschieben"
+                    aria-label="Verschieben"
+                  >
+                    <FolderInput className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setDocToDelete(doc)}
+                    disabled={deletingDocId === doc.id}
+                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors disabled:opacity-50 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                    title="Löschen"
+                    aria-label="Löschen"
+                  >
+                    {deletingDocId === doc.id ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-red-600" />
+                    ) : (
+                      <Trash2 className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
+              );
+          })}
         </div>
       )}
 

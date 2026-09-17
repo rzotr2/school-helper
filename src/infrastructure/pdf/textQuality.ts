@@ -92,7 +92,8 @@ export function evaluateTextQuality(text: string): TextQuality {
   };
 
   // Hard blockers: strong evidence that the text layer is missing or
-  // corrupted. Only these make the text unusable (and route it to OCR).
+  // corrupted. Only these make the text unusable — the quality describes
+  // the native representation and never decides whether OCR runs.
   const blockers: string[] = [];
 
   if (charCount === 0) {
