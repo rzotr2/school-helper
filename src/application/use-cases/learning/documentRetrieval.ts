@@ -102,6 +102,7 @@ export async function retrieveTopicDocuments(
         title: `${row.original_name} (Seite ${page.pageNumber})`,
         documentId: row.id,
         documentName: row.original_name,
+        topicId: row.topic_id,
         pageNumber: page.pageNumber,
         content: pageText,
       });

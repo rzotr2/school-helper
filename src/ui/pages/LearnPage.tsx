@@ -10,23 +10,45 @@ import {
   XCircle,
   AlertCircle,
   Loader2,
-  RefreshCw,
+  RotateCcw,
   FileText,
   Globe,
+  Trophy,
+  BarChart2,
 } from 'lucide-react';
 import { useAuth } from '../../infrastructure/auth/AuthContext';
 import { Subject, getSubjects } from '../../application/use-cases/subjects';
 import { Topic, getAllTopics } from '../../application/use-cases/topics';
+import { Document, getAllDocuments } from '../../application/use-cases/documents';
 import { retrieveTopicDocuments } from '../../application/use-cases/learning/documentRetrieval';
 import { retrieveWebSources } from '../../application/use-cases/learning/webRetrieval';
-import { generateQuizTask } from '../../application/use-cases/learning/learnGenerator';
+import {
+  generateQuizTask,
+  generateFlashcardTask,
+  generateFillInBlankTask,
+  BLANK_MARKER,
+  checkFillInBlankAnswer,
+} from '../../application/use-cases/learning/learnGenerator';
 import type {
+  CompletedTask,
+  CompletedQuizTask,
+  CompletedFlashcardTask,
+  CompletedFillInBlankTask,
+  FillInBlankSessionSummary,
+  FillInBlankTask,
+  FlashcardSessionSummary,
+  FlashcardTask,
   GroundedKnowledgeContext,
   GroundedSource,
+  LearningDifficulty,
   LearningMode,
+  LearningTask,
+  QuizSessionSummary,
   QuizTask,
 } from '../../application/use-cases/learning/learningTypes';
 import { cn } from '../../shared/utils/cn';
+
+const SESSION_QUESTION_LIMIT = 5;
 
 export function LearnPage() {
   const { user, isLoading: isAuthLoading } = useAuth();
@@ -34,49 +56,69 @@ export function LearnPage() {
   // Step 1: Subjects & Topics selection
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
+  const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoadingTaxonomy, setIsLoadingTaxonomy] = useState(true);
 
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>('');
   const [selectedTopicIds, setSelectedTopicIds] = useState<string[]>([]);
   const [selectedMode, setSelectedMode] = useState<LearningMode>('quiz');
+  const [difficulty, setDifficulty] = useState<LearningDifficulty>('mittel');
 
   // Step 2: Generation and Active Session State
   const [knowledgeContext, setKnowledgeContext] = useState<GroundedKnowledgeContext | null>(null);
-  const [currentTask, setCurrentTask] = useState<QuizTask | null>(null);
+  const [currentTask, setCurrentTask] = useState<LearningTask | null>(null);
+  const [currentQuestionNumber, setCurrentQuestionNumber] = useState<number>(1);
+  const [completedTasks, setCompletedTasks] = useState<CompletedTask[]>([]);
+  const [isSessionComplete, setIsSessionComplete] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStep, setGenerationStep] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
 
-  // Interaction State for Quiz
+  // Interaction State for Quiz & Lückentext
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [isAnswerRevealed, setIsAnswerRevealed] = useState(false);
+  const [fillBlankInput, setFillBlankInput] = useState<string>('');
+  const [fillBlankResult, setFillBlankResult] = useState<{ isCorrect: boolean } | null>(null);
 
   useEffect(() => {
     async function loadTaxonomy() {
       if (!user || isAuthLoading) return;
       try {
         setIsLoadingTaxonomy(true);
-        const [loadedSubjects, loadedTopics] = await Promise.all([
+        const [loadedSubjects, loadedTopics, loadedDocs] = await Promise.all([
           getSubjects(user.id),
           getAllTopics(user.id),
+          getAllDocuments(user.id),
         ]);
         setSubjects(loadedSubjects);
         setTopics(loadedTopics);
+        setDocuments(loadedDocs);
 
         if (loadedSubjects.length > 0) {
           setSelectedSubjectId(loadedSubjects[0].id);
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Fehler beim Laden der Fächer');
+        setError(err instanceof Error ? err.message : 'Fehler beim Laden der Daten');
       } finally {
         setIsLoadingTaxonomy(false);
       }
     }
-    loadData();
-    async function loadData() {
-      await loadTaxonomy();
-    }
+    void loadTaxonomy();
   }, [user, isAuthLoading]);
+
+  // Document counts per topic (total and completed)
+  const topicDocumentCounts = useMemo(() => {
+    const counts = new Map<string, { total: number; completed: number }>();
+    for (const doc of documents) {
+      const current = counts.get(doc.topicId) ?? { total: 0, completed: 0 };
+      current.total += 1;
+      if (doc.processingStatus === 'completed') {
+        current.completed += 1;
+      }
+      counts.set(doc.topicId, current);
+    }
+    return counts;
+  }, [documents]);
 
   // Topics belonging to the selected subject
   const availableTopics = useMemo(() => {
@@ -84,26 +126,86 @@ export function LearnPage() {
     return topics.filter((t) => t.subjectId === selectedSubjectId);
   }, [topics, selectedSubjectId]);
 
+  // Topics that can actually be selected (have completed documents)
+  const selectableTopics = useMemo(() => {
+    return availableTopics.filter((t) => (topicDocumentCounts.get(t.id)?.completed ?? 0) > 0);
+  }, [availableTopics, topicDocumentCounts]);
+
   // Handle subject change: reset selected topics
   const handleSelectSubject = (subjectId: string) => {
     setSelectedSubjectId(subjectId);
     setSelectedTopicIds([]);
+    resetSession();
+  };
+
+  const resetSession = () => {
     setKnowledgeContext(null);
     setCurrentTask(null);
+    setCurrentQuestionNumber(1);
+    setCompletedTasks([]);
+    setIsSessionComplete(false);
+    setSelectedAnswer(null);
+    setIsAnswerRevealed(false);
+    setFillBlankInput('');
+    setFillBlankResult(null);
     setError(null);
   };
 
   const toggleTopic = (topicId: string) => {
+    const stats = topicDocumentCounts.get(topicId);
+    if (!stats || stats.completed === 0) {
+      // Impossible to select empty topics without documents
+      return;
+    }
     setSelectedTopicIds((prev) =>
       prev.includes(topicId) ? prev.filter((id) => id !== topicId) : [...prev, topicId],
     );
   };
 
+  // Select next topic in a round-robin / balanced fashion
+  const getNextTargetTopic = (
+    context: GroundedKnowledgeContext,
+    completed: CompletedTask[],
+  ) => {
+    const topicCounts = new Map<string, number>();
+    context.topicIds.forEach((id) => topicCounts.set(id, 0));
+
+    completed.forEach((c) => {
+      const cnt = topicCounts.get(c.task.topicId) ?? 0;
+      topicCounts.set(c.task.topicId, cnt + 1);
+    });
+
+    let minTopicId = context.topicIds[0];
+    let minCount = Infinity;
+    for (const [tId, cnt] of topicCounts.entries()) {
+      if (cnt < minCount) {
+        minCount = cnt;
+        minTopicId = tId;
+      }
+    }
+
+    const tIndex = context.topicIds.indexOf(minTopicId);
+    const tName = context.topicNames[tIndex] || minTopicId;
+    return { targetTopicId: minTopicId, targetTopicName: tName };
+  };
+
   const handleStartSession = async () => {
     if (!user || selectedTopicIds.length === 0) return;
 
+    // Strict validation: impossible to create quiz for empty topics
+    const emptyTopics = selectedTopicIds.filter(
+      (tId) => (topicDocumentCounts.get(tId)?.completed ?? 0) === 0,
+    );
+    if (emptyTopics.length > 0) {
+      setError('Ausgewählte Themen ohne Dokumente können nicht für die Lernsession verwendet werden.');
+      return;
+    }
+
     setIsGenerating(true);
     setError(null);
+    setCompletedTasks([]);
+    setCurrentQuestionNumber(1);
+    setIsSessionComplete(false);
     setSelectedAnswer(null);
     setIsAnswerRevealed(false);
 
@@ -111,9 +213,15 @@ export function LearnPage() {
       const selectedSubject = subjects.find((s) => s.id === selectedSubjectId);
       const selectedTopicsList = topics.filter((t) => selectedTopicIds.includes(t.id));
 
-      // 1. Retrieve user documents
+      // 1. Retrieve user documents - must have document sources
       setGenerationStep('Lade Dokumente aus deinen Themen…');
       const docSources = await retrieveTopicDocuments(user.id, selectedTopicIds);
+
+      if (docSources.length === 0) {
+        throw new Error(
+          'Zu den ausgewählten Themen wurden keine Dokumente gefunden. Bitte lade zuerst Unterlagen hoch, um ein Quiz zu erstellen.',
+        );
+      }
 
       // 2. Retrieve authoritative web information
       setGenerationStep('Recherchiere aktuelle Quellen aus dem Internet…');
@@ -140,10 +248,37 @@ export function LearnPage() {
 
       setKnowledgeContext(context);
 
-      // 3. Generate grounded Quiz task
-      setGenerationStep('Erstelle quellenbasierte Quiz-Aufgabe…');
-      const task = await generateQuizTask(context);
+      // 3. Generate initial task based on selectedMode with balanced topic selection
+      setGenerationStep(
+        selectedMode === 'flashcards'
+          ? 'Erstelle quellenbasierte Karteikarte…'
+          : selectedMode === 'fill-in-the-blank'
+            ? 'Erstelle quellenbasierten Lückentext…'
+            : 'Erstelle quellenbasierte Quiz-Aufgabe…',
+      );
+      const { targetTopicId, targetTopicName } = getNextTargetTopic(context, []);
+      let task: LearningTask;
+      if (selectedMode === 'flashcards') {
+        task = await generateFlashcardTask(context, {
+          targetTopicId,
+          targetTopicName,
+          difficulty,
+        });
+      } else if (selectedMode === 'fill-in-the-blank') {
+        task = await generateFillInBlankTask(context, {
+          targetTopicId,
+          targetTopicName,
+          difficulty,
+        });
+      } else {
+        task = await generateQuizTask(context, {
+          targetTopicId,
+          targetTopicName,
+          difficulty,
+        });
+      }
       setCurrentTask(task);
+      setCurrentQuestionNumber(1);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Fehler beim Erstellen der Lernsession');
     } finally {
@@ -152,17 +287,105 @@ export function LearnPage() {
     }
   };
 
+  const handleSelectAnswerOption = (option: string) => {
+    if (isAnswerRevealed || !currentTask || currentTask.mode === 'flashcards' || currentTask.mode === 'fill-in-the-blank') return;
+    setSelectedAnswer(option);
+    setIsAnswerRevealed(true);
+
+    const isCorrect = option === currentTask.correctAnswer;
+    const completedRecord: CompletedQuizTask = {
+      task: currentTask,
+      selectedAnswer: option,
+      isCorrect,
+      answeredAt: new Date().toISOString(),
+    };
+    setCompletedTasks((prev) => [...prev, completedRecord]);
+  };
+
+  const handleFlipFlashcard = () => {
+    if (!currentTask || currentTask.mode !== 'flashcards') return;
+    const nextRevealed = !isAnswerRevealed;
+    setIsAnswerRevealed(nextRevealed);
+
+    if (nextRevealed && !completedTasks.some((c) => c.task.id === currentTask.id)) {
+      const completedRecord: CompletedFlashcardTask = {
+        task: currentTask,
+        completedAt: new Date().toISOString(),
+      };
+      setCompletedTasks((prev) => [...prev, completedRecord]);
+    }
+  };
+
+  const handleSubmitFillInBlank = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (isAnswerRevealed || !currentTask || currentTask.mode !== 'fill-in-the-blank') return;
+
+    const trimmedInput = fillBlankInput.trim();
+    if (!trimmedInput) return;
+
+    const isCorrect = checkFillInBlankAnswer(trimmedInput, currentTask.answer);
+    setFillBlankResult({ isCorrect });
+    setIsAnswerRevealed(true);
+
+    const completedRecord: CompletedFillInBlankTask = {
+      task: currentTask,
+      userAnswer: trimmedInput,
+      isCorrect,
+      completedAt: new Date().toISOString(),
+    };
+    setCompletedTasks((prev) => [...prev, completedRecord]);
+  };
+
   const handleNextTask = async () => {
     if (!knowledgeContext) return;
+
+    if (completedTasks.length >= SESSION_QUESTION_LIMIT) {
+      setIsSessionComplete(true);
+      return;
+    }
+
     setIsGenerating(true);
     setError(null);
     setSelectedAnswer(null);
     setIsAnswerRevealed(false);
+    setFillBlankInput('');
+    setFillBlankResult(null);
     setGenerationStep('Generiere nächste Aufgabe auf Basis der Quellen…');
 
     try {
-      const task = await generateQuizTask(knowledgeContext);
+      const { targetTopicId, targetTopicName } = getNextTargetTopic(
+        knowledgeContext,
+        completedTasks,
+      );
+      const avoidQuestions = completedTasks.map((c) =>
+        'question' in c.task ? c.task.question : c.task.sentenceWithBlank,
+      );
+
+      let task: LearningTask;
+      if (selectedMode === 'flashcards') {
+        task = await generateFlashcardTask(knowledgeContext, {
+          targetTopicId,
+          targetTopicName,
+          difficulty,
+          avoidQuestions,
+        });
+      } else if (selectedMode === 'fill-in-the-blank') {
+        task = await generateFillInBlankTask(knowledgeContext, {
+          targetTopicId,
+          targetTopicName,
+          difficulty,
+          avoidSentences: avoidQuestions,
+        });
+      } else {
+        task = await generateQuizTask(knowledgeContext, {
+          targetTopicId,
+          targetTopicName,
+          difficulty,
+          avoidQuestions,
+        });
+      }
       setCurrentTask(task);
+      setCurrentQuestionNumber((prev) => prev + 1);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Fehler beim Erstellen der nächsten Aufgabe');
     } finally {
@@ -171,11 +394,123 @@ export function LearnPage() {
     }
   };
 
-  const handleSelectAnswerOption = (option: string) => {
-    if (isAnswerRevealed) return;
-    setSelectedAnswer(option);
-    setIsAnswerRevealed(true);
-  };
+  // Summary calculations for completed session
+  const quizSummary: QuizSessionSummary | null = useMemo(() => {
+    if (
+      !isSessionComplete ||
+      completedTasks.length === 0 ||
+      !knowledgeContext ||
+      selectedMode !== 'quiz'
+    ) {
+      return null;
+    }
+
+    const byTopicMap = new Map<string, { total: number; correct: number }>();
+    knowledgeContext.topicIds.forEach((tId) => {
+      byTopicMap.set(tId, { total: 0, correct: 0 });
+    });
+
+    let correctCount = 0;
+    completedTasks.forEach((c) => {
+      const isCorrect = 'isCorrect' in c ? c.isCorrect : false;
+      if (isCorrect) correctCount++;
+      const current = byTopicMap.get(c.task.topicId) ?? { total: 0, correct: 0 };
+      byTopicMap.set(c.task.topicId, {
+        total: current.total + 1,
+        correct: current.correct + (isCorrect ? 1 : 0),
+      });
+    });
+
+    const byTopic = knowledgeContext.topicIds.map((tId, idx) => {
+      const stats = byTopicMap.get(tId) ?? { total: 0, correct: 0 };
+      return {
+        topicId: tId,
+        topicName: knowledgeContext.topicNames[idx] || tId,
+        total: stats.total,
+        correct: stats.correct,
+      };
+    });
+
+    return {
+      totalQuestions: completedTasks.length,
+      correctCount,
+      byTopic,
+    };
+  }, [isSessionComplete, completedTasks, knowledgeContext, selectedMode]);
+
+  const flashcardSummary: FlashcardSessionSummary | null = useMemo(() => {
+    if (
+      !isSessionComplete ||
+      completedTasks.length === 0 ||
+      !knowledgeContext ||
+      selectedMode !== 'flashcards'
+    ) {
+      return null;
+    }
+
+    const byTopicMap = new Map<string, number>();
+    knowledgeContext.topicIds.forEach((tId) => {
+      byTopicMap.set(tId, 0);
+    });
+
+    completedTasks.forEach((c) => {
+      byTopicMap.set(c.task.topicId, (byTopicMap.get(c.task.topicId) ?? 0) + 1);
+    });
+
+    const byTopic = knowledgeContext.topicIds.map((tId, idx) => ({
+      topicId: tId,
+      topicName: knowledgeContext.topicNames[idx] || tId,
+      total: byTopicMap.get(tId) ?? 0,
+    }));
+
+    return {
+      totalCards: completedTasks.length,
+      byTopic,
+    };
+  }, [isSessionComplete, completedTasks, knowledgeContext, selectedMode]);
+
+  const fillBlankSummary: FillInBlankSessionSummary | null = useMemo(() => {
+    if (
+      !isSessionComplete ||
+      completedTasks.length === 0 ||
+      !knowledgeContext ||
+      selectedMode !== 'fill-in-the-blank'
+    ) {
+      return null;
+    }
+
+    const byTopicMap = new Map<string, { total: number; correct: number }>();
+    knowledgeContext.topicIds.forEach((tId) => {
+      byTopicMap.set(tId, { total: 0, correct: 0 });
+    });
+
+    let correctCount = 0;
+    completedTasks.forEach((c) => {
+      const isCorrect = 'isCorrect' in c ? c.isCorrect : false;
+      if (isCorrect) correctCount++;
+      const current = byTopicMap.get(c.task.topicId) ?? { total: 0, correct: 0 };
+      byTopicMap.set(c.task.topicId, {
+        total: current.total + 1,
+        correct: current.correct + (isCorrect ? 1 : 0),
+      });
+    });
+
+    const byTopic = knowledgeContext.topicIds.map((tId, idx) => {
+      const stats = byTopicMap.get(tId) ?? { total: 0, correct: 0 };
+      return {
+        topicId: tId,
+        topicName: knowledgeContext.topicNames[idx] || tId,
+        total: stats.total,
+        correct: stats.correct,
+      };
+    });
+
+    return {
+      totalTasks: completedTasks.length,
+      correctCount,
+      byTopic,
+    };
+  }, [isSessionComplete, completedTasks, knowledgeContext, selectedMode]);
 
   // Find referenced sources for the current task
   const referencedSources = useMemo(() => {
@@ -183,6 +518,12 @@ export function LearnPage() {
     return currentTask.sourceIds
       .map((id) => knowledgeContext.sources.find((s) => s.id === id))
       .filter((s): s is GroundedSource => Boolean(s));
+  }, [currentTask, knowledgeContext]);
+
+  const currentTopicName = useMemo(() => {
+    if (!currentTask || !knowledgeContext) return '';
+    const idx = knowledgeContext.topicIds.indexOf(currentTask.topicId);
+    return idx !== -1 ? knowledgeContext.topicNames[idx] : '';
   }, [currentTask, knowledgeContext]);
 
   if (isAuthLoading || isLoadingTaxonomy) {
@@ -218,8 +559,8 @@ export function LearnPage() {
         </div>
       )}
 
-      {/* Configuration Section (when no active task or when changing) */}
-      {!currentTask && !isGenerating && (
+      {/* Configuration Section (when no active task and session not finished) */}
+      {!currentTask && !isGenerating && !isSessionComplete && (
         <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-2xs space-y-6">
           {/* Step 1: Select Subject */}
           <div className="space-y-2">
@@ -257,20 +598,24 @@ export function LearnPage() {
                   <Layers className="w-4 h-4 text-slate-400" />
                   <span>2. Themen auswählen (mindestens eins)</span>
                 </label>
-                {availableTopics.length > 0 && (
+                {selectableTopics.length > 0 && (
                   <button
+                    type="button"
                     onClick={() => {
-                      if (selectedTopicIds.length === availableTopics.length) {
+                      const allSelected = selectableTopics.every((t) =>
+                        selectedTopicIds.includes(t.id),
+                      );
+                      if (allSelected) {
                         setSelectedTopicIds([]);
                       } else {
-                        setSelectedTopicIds(availableTopics.map((t) => t.id));
+                        setSelectedTopicIds(selectableTopics.map((t) => t.id));
                       }
                     }}
                     className="text-xs text-blue-600 hover:text-blue-800 font-medium cursor-pointer"
                   >
-                    {selectedTopicIds.length === availableTopics.length
+                    {selectableTopics.every((t) => selectedTopicIds.includes(t.id))
                       ? 'Auswahl aufheben'
-                      : 'Alle auswählen'}
+                      : 'Alle mit Unterlagen auswählen'}
                   </button>
                 )}
               </div>
@@ -280,80 +625,175 @@ export function LearnPage() {
                   Diesem Fach sind noch keine Themen zugeordnet.
                 </p>
               ) : (
-                <div className="flex flex-wrap gap-2">
-                  {availableTopics.map((t) => {
-                    const isSelected = selectedTopicIds.includes(t.id);
-                    return (
-                      <button
-                        key={t.id}
-                        onClick={() => toggleTopic(t.id)}
-                        className={cn(
-                          'px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer border flex items-center gap-1.5',
-                          isSelected
-                            ? 'bg-slate-900 border-slate-900 text-white shadow-2xs'
-                            : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100',
-                        )}
-                      >
-                        <span>{t.name}</span>
-                        {isSelected && <span className="text-slate-300">✓</span>}
-                      </button>
-                    );
-                  })}
+                <div className="space-y-3">
+                  <div className="flex flex-wrap gap-2">
+                    {availableTopics.map((t) => {
+                      const stats = topicDocumentCounts.get(t.id);
+                      const docCount = stats?.completed ?? 0;
+                      const totalDocs = stats?.total ?? 0;
+                      const isSelectable = docCount > 0;
+                      const isSelected = selectedTopicIds.includes(t.id);
+
+                      return (
+                        <button
+                          key={t.id}
+                          type="button"
+                          disabled={!isSelectable}
+                          onClick={() => toggleTopic(t.id)}
+                          title={
+                            !isSelectable
+                              ? totalDocs > 0
+                                ? 'Dokumente werden noch verarbeitet'
+                                : 'Thema enthält keine Dokumente und kann nicht gelernt werden'
+                              : undefined
+                          }
+                          className={cn(
+                            'px-3 py-1.5 rounded-lg text-xs font-medium transition-all border flex items-center gap-1.5',
+                            !isSelectable &&
+                              'opacity-45 bg-slate-100/80 border-slate-200 text-slate-400 cursor-not-allowed shadow-none',
+                            isSelectable &&
+                              isSelected &&
+                              'bg-slate-900 border-slate-900 text-white shadow-2xs cursor-pointer',
+                            isSelectable &&
+                              !isSelected &&
+                              'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 cursor-pointer',
+                          )}
+                        >
+                          <span>{t.name}</span>
+                          {isSelectable ? (
+                            <span
+                              className={cn(
+                                'text-[10px] px-1.5 py-0.2 rounded font-normal',
+                                isSelected
+                                  ? 'bg-slate-800 text-slate-300'
+                                  : 'bg-slate-200/80 text-slate-600',
+                              )}
+                            >
+                              {docCount} Dok.
+                            </span>
+                          ) : (
+                            <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-200/60 text-slate-400 font-normal">
+                              {totalDocs > 0 ? 'Wird verarbeitet…' : '0 Dok.'}
+                            </span>
+                          )}
+                          {isSelectable && isSelected && <span className="text-slate-300">✓</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {availableTopics.length > 0 && selectableTopics.length === 0 && (
+                    <div className="p-3.5 bg-amber-50/80 border border-amber-200/90 rounded-xl text-xs text-amber-900 flex items-start gap-2.5">
+                      <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-semibold text-amber-950">
+                          Keine Themen mit Dokumenten vorhanden
+                        </p>
+                        <p className="text-amber-800 mt-0.5">
+                          Für dieses Fach wurden noch keine fertigen Unterlagen hochgeladen. Bitte lade
+                          zuerst Dokumente in deine Themen hoch, um ein Quiz erstellen zu können.
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
           )}
 
-          {/* Step 3: Select Learning Mode */}
+          {/* Step 3: Select Difficulty & Mode */}
           {selectedTopicIds.length > 0 && (
-            <div className="space-y-2 pt-4 border-t border-slate-100">
-              <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                <Sparkles className="w-4 h-4 text-slate-400" />
-                <span>3. Lernmodus</span>
-              </label>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <button
-                  onClick={() => setSelectedMode('quiz')}
-                  className={cn(
-                    'p-3.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between',
-                    selectedMode === 'quiz'
-                      ? 'border-blue-500 bg-blue-50/50 shadow-2xs'
-                      : 'border-slate-200 bg-white hover:bg-slate-50',
-                  )}
-                >
-                  <div>
-                    <div className="font-semibold text-sm text-slate-900">Multiple-Choice Quiz</div>
-                    <p className="text-xs text-slate-500 mt-1">
-                      Verifizierte Fragen mit 4 Antwortoptionen und Quellennachweis.
-                    </p>
-                  </div>
-                  <span className="text-[11px] font-semibold text-blue-600 mt-3 inline-block">
-                    Aktiv (MVP)
-                  </span>
-                </button>
-
-                <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/50 opacity-60 text-left flex flex-col justify-between">
-                  <div>
-                    <div className="font-medium text-sm text-slate-700">Karteikarten</div>
-                    <p className="text-xs text-slate-400 mt-1">
-                      Kompakte Frage- und Antwortkarten aus denselben Quellen.
-                    </p>
-                  </div>
-                  <span className="text-[11px] font-medium text-slate-400 mt-3 inline-block">
-                    Demnächst
-                  </span>
+            <div className="space-y-4 pt-4 border-t border-slate-100">
+              <div className="space-y-2">
+                <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                  <BarChart2 className="w-4 h-4 text-slate-400" />
+                  <span>3. Schwierigkeit</span>
+                </label>
+                <div className="flex gap-2">
+                  {(['leicht', 'mittel', 'schwer'] as LearningDifficulty[]).map((d) => (
+                    <button
+                      key={d}
+                      onClick={() => setDifficulty(d)}
+                      className={cn(
+                        'px-3.5 py-1.5 rounded-lg text-xs font-medium capitalize border transition-all cursor-pointer',
+                        difficulty === d
+                          ? 'bg-blue-50 border-blue-300 text-blue-700 font-semibold'
+                          : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50',
+                      )}
+                    >
+                      {d}
+                    </button>
+                  ))}
                 </div>
+              </div>
 
-                <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/50 opacity-60 text-left flex flex-col justify-between">
-                  <div>
-                    <div className="font-medium text-sm text-slate-700">Lückentext</div>
-                    <p className="text-xs text-slate-400 mt-1">
-                      Wichtige Schlüsselbegriffe im Kontext ergänzen.
-                    </p>
-                  </div>
-                  <span className="text-[11px] font-medium text-slate-400 mt-3 inline-block">
-                    Demnächst
-                  </span>
+              <div className="space-y-2">
+                <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-slate-400" />
+                  <span>4. Lernmodus</span>
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <button
+                    onClick={() => setSelectedMode('quiz')}
+                    className={cn(
+                      'p-3.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between',
+                      selectedMode === 'quiz'
+                        ? 'border-blue-500 bg-blue-50/50 shadow-2xs'
+                        : 'border-slate-200 bg-white hover:bg-slate-50',
+                    )}
+                  >
+                    <div>
+                      <div className="font-semibold text-sm text-slate-900">Multiple-Choice Quiz</div>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Verifizierte Fragen mit 4 Antwortoptionen und Quellennachweis.
+                      </p>
+                    </div>
+                    <span className="text-[11px] font-semibold text-blue-600 mt-3 inline-block">
+                      Aktiv
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedMode('flashcards')}
+                    className={cn(
+                      'p-3.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between',
+                      selectedMode === 'flashcards'
+                        ? 'border-blue-500 bg-blue-50/50 shadow-2xs'
+                        : 'border-slate-200 bg-white hover:bg-slate-50',
+                    )}
+                  >
+                    <div>
+                      <div className="font-semibold text-sm text-slate-900">Karteikarten</div>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Kompakte Frage- und Antwortkarten aus denselben Quellen.
+                      </p>
+                    </div>
+                    <span className="text-[11px] font-semibold text-blue-600 mt-3 inline-block">
+                      {selectedMode === 'flashcards' ? 'Ausgewählt' : 'Aktiv'}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedMode('fill-in-the-blank')}
+                    className={cn(
+                      'p-3.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between',
+                      selectedMode === 'fill-in-the-blank'
+                        ? 'border-blue-500 bg-blue-50/50 shadow-2xs'
+                        : 'border-slate-200 bg-white hover:bg-slate-50',
+                    )}
+                  >
+                    <div>
+                      <div className="font-semibold text-sm text-slate-900">Lückentext</div>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Wichtige Schlüsselbegriffe im Kontext ergänzen.
+                      </p>
+                    </div>
+                    <span className="text-[11px] font-semibold text-blue-600 mt-3 inline-block">
+                      {selectedMode === 'fill-in-the-blank' ? 'Ausgewählt' : 'Aktiv'}
+                    </span>
+                  </button>
                 </div>
               </div>
             </div>
@@ -363,10 +803,21 @@ export function LearnPage() {
           {selectedTopicIds.length > 0 && (
             <div className="pt-2">
               <button
+                type="button"
                 onClick={handleStartSession}
-                className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-xl shadow-xs transition-colors cursor-pointer"
+                disabled={
+                  isGenerating ||
+                  selectedTopicIds.length === 0 ||
+                  selectedTopicIds.some(
+                    (tId) => (topicDocumentCounts.get(tId)?.completed ?? 0) === 0,
+                  )
+                }
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl shadow-xs transition-colors cursor-pointer"
               >
-                <span>Lernsession starten</span>
+                <span>
+                  Lernsession starten ({SESSION_QUESTION_LIMIT}{' '}
+                  {selectedMode === 'flashcards' ? 'Karten' : 'Fragen'})
+                </span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>
@@ -378,110 +829,476 @@ export function LearnPage() {
       {isGenerating && (
         <div className="bg-white border border-slate-200 rounded-xl p-8 text-center space-y-3">
           <Loader2 className="w-8 h-8 text-blue-600 animate-spin mx-auto" />
-          <h3 className="text-base font-semibold text-slate-900">Quellenbasiertes Lernen wird vorbereitet</h3>
+          <h3 className="text-base font-semibold text-slate-900">
+            Quellenbasiertes Lernen wird vorbereitet
+          </h3>
           <p className="text-sm text-slate-500 max-w-md mx-auto">{generationStep || 'Bitte warten…'}</p>
         </div>
       )}
 
-      {/* Active Quiz Task UI */}
-      {currentTask && !isGenerating && (
+      {/* Session Completed Summary Screen */}
+      {isSessionComplete && (quizSummary || flashcardSummary || fillBlankSummary) && !isGenerating && (
+        <div className="bg-white border border-slate-200 rounded-xl p-8 shadow-2xs space-y-6">
+          <div className="text-center space-y-2">
+            <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center mx-auto mb-2">
+              {selectedMode === 'flashcards' ? (
+                <Sparkles className="w-6 h-6 text-blue-600" />
+              ) : (
+                <Trophy className="w-6 h-6" />
+              )}
+            </div>
+            <h2 className="text-xl font-bold text-slate-900">
+              {selectedMode === 'flashcards'
+                ? 'Karteikarten-Session abgeschlossen!'
+                : selectedMode === 'fill-in-the-blank'
+                  ? 'Lückentext-Session abgeschlossen!'
+                  : 'Quiz abgeschlossen!'}
+            </h2>
+            <p className="text-sm text-slate-500">
+              {selectedMode === 'flashcards'
+                ? `Du hast alle ${completedTasks.length} Karteikarten durchgearbeitet.`
+                : selectedMode === 'fill-in-the-blank'
+                  ? `Du hast ${fillBlankSummary?.correctCount ?? 0} von ${fillBlankSummary?.totalTasks ?? 0} Lücken richtig ergänzt.`
+                  : `Du hast ${quizSummary?.correctCount ?? 0} von ${quizSummary?.totalQuestions ?? 0} Fragen richtig beantwortet.`}
+            </p>
+          </div>
+
+          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-3">
+            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              {selectedMode === 'flashcards' ? 'Bearbeitete Themen' : 'Ergebnis nach Themen'}
+            </h3>
+            <div className="space-y-2">
+              {selectedMode === 'flashcards' && flashcardSummary
+                ? flashcardSummary.byTopic.map((item) => (
+                    <div
+                      key={item.topicId}
+                      className="flex items-center justify-between p-3 rounded-lg bg-white border border-slate-200/70 text-sm"
+                    >
+                      <span className="font-medium text-slate-800">{item.topicName}</span>
+                      <span className="text-xs font-semibold text-slate-600">
+                        {item.total} {item.total === 1 ? 'Karte' : 'Karten'}
+                      </span>
+                    </div>
+                  ))
+                : (fillBlankSummary || quizSummary)?.byTopic.map((item) => (
+                    <div
+                      key={item.topicId}
+                      className="flex items-center justify-between p-3 rounded-lg bg-white border border-slate-200/70 text-sm"
+                    >
+                      <span className="font-medium text-slate-800">{item.topicName}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold text-slate-600">
+                          {item.correct} / {item.total} richtig
+                        </span>
+                        <span
+                          className={cn(
+                            'text-xs px-2 py-0.5 rounded font-medium',
+                            item.total > 0 && item.correct === item.total
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : item.correct > 0
+                                ? 'bg-amber-100 text-amber-800'
+                                : 'bg-red-100 text-red-800',
+                          )}
+                        >
+                          {item.total > 0 ? Math.round((item.correct / item.total) * 100) : 0}%
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+            </div>
+          </div>
+
+          <div className="flex justify-center gap-3 pt-2">
+            <button
+              onClick={handleStartSession}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg shadow-xs transition-colors cursor-pointer"
+            >
+              <RotateCcw className="w-4 h-4" />
+              <span>Erneut spielen</span>
+            </button>
+            <button
+              onClick={resetSession}
+              className="px-4 py-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 text-sm font-medium rounded-lg transition-colors cursor-pointer"
+            >
+              Andere Themen wählen
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Active Task UI (Quiz or Flashcard) */}
+      {currentTask && !isGenerating && !isSessionComplete && (
         <div className="space-y-6">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              Aufgabe · {knowledgeContext?.subjectName}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                {selectedMode === 'flashcards'
+                  ? 'Karte'
+                  : selectedMode === 'fill-in-the-blank'
+                    ? 'Aufgabe'
+                    : 'Frage'}{' '}
+                {currentQuestionNumber} von {SESSION_QUESTION_LIMIT}
+              </span>
+              {currentTopicName && (
+                <span className="text-[11px] font-medium bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
+                  {currentTopicName}
+                </span>
+              )}
+              {currentTask.difficulty && (
+                <span className="text-[11px] font-medium bg-blue-50 text-blue-700 px-2 py-0.5 rounded capitalize">
+                  {currentTask.difficulty}
+                </span>
+              )}
+            </div>
             <button
-              onClick={() => {
-                setCurrentTask(null);
-                setKnowledgeContext(null);
-              }}
+              onClick={resetSession}
               className="text-xs text-slate-500 hover:text-slate-800 cursor-pointer"
             >
-              Themen ändern
+              Session beenden
             </button>
           </div>
 
-          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-2xs space-y-6">
-            {/* Question */}
-            <div className="space-y-2">
-              <h2 className="text-lg font-semibold text-slate-900 leading-snug">
-                {currentTask.question}
-              </h2>
-            </div>
+          {/* Quiz Task View */}
+          {selectedMode === 'quiz' && 'options' in currentTask && (
+            <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-2xs space-y-6">
+              {/* Question */}
+              <div className="space-y-2">
+                <h2 className="text-lg font-semibold text-slate-900 leading-snug">
+                  {currentTask.question}
+                </h2>
+              </div>
 
-            {/* Multiple Choice Options */}
-            <div className="space-y-2.5">
-              {currentTask.options.map((option, idx) => {
-                const isSelected = selectedAnswer === option;
-                const isCorrect = option === currentTask.correctAnswer;
+              {/* Multiple Choice Options */}
+              <div className="space-y-2.5">
+                {currentTask.options.map((option, idx) => {
+                  const isSelected = selectedAnswer === option;
+                  const isCorrect = option === currentTask.correctAnswer;
 
-                let optionStyle = 'border-slate-200 bg-white text-slate-800 hover:bg-slate-50';
+                  let optionStyle = 'border-slate-200 bg-white text-slate-800 hover:bg-slate-50';
 
-                if (isAnswerRevealed) {
-                  if (isCorrect) {
-                    optionStyle = 'border-emerald-500 bg-emerald-50/80 text-emerald-950 font-medium';
-                  } else if (isSelected && !isCorrect) {
-                    optionStyle = 'border-red-500 bg-red-50/80 text-red-950';
-                  } else {
-                    optionStyle = 'border-slate-200 bg-slate-50/50 text-slate-400 opacity-60';
+                  if (isAnswerRevealed) {
+                    if (isCorrect) {
+                      optionStyle =
+                        'border-emerald-500 bg-emerald-50/80 text-emerald-950 font-medium';
+                    } else if (isSelected && !isCorrect) {
+                      optionStyle = 'border-red-500 bg-red-50/80 text-red-950';
+                    } else {
+                      optionStyle = 'border-slate-200 bg-slate-50/50 text-slate-400 opacity-60';
+                    }
                   }
-                }
 
-                return (
-                  <button
-                    key={idx}
-                    disabled={isAnswerRevealed}
-                    onClick={() => handleSelectAnswerOption(option)}
+                  return (
+                    <button
+                      key={idx}
+                      disabled={isAnswerRevealed}
+                      onClick={() => handleSelectAnswerOption(option)}
+                      className={cn(
+                        'w-full p-4 rounded-xl border text-left text-sm transition-all cursor-pointer flex items-center justify-between',
+                        optionStyle,
+                        isAnswerRevealed && 'cursor-default',
+                      )}
+                    >
+                      <span>{option}</span>
+                      {isAnswerRevealed && isCorrect && (
+                        <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 ml-2" />
+                      )}
+                      {isAnswerRevealed && isSelected && !isCorrect && (
+                        <XCircle className="w-5 h-5 text-red-600 shrink-0 ml-2" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Explanation & Evidence after answering */}
+              {isAnswerRevealed && (
+                <div className="space-y-3 pt-4 border-t border-slate-100">
+                  <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-2">
+                    <div className="flex items-center gap-2 text-xs font-semibold text-slate-700 uppercase tracking-wide">
+                      <span>Erklärung</span>
+                    </div>
+                    <p className="text-sm text-slate-800 leading-relaxed">
+                      {currentTask.explanation}
+                    </p>
+                    {currentTask.evidence && (
+                      <div className="pt-2 border-t border-slate-200/60 text-xs text-slate-600 italic">
+                        „{currentTask.evidence}“
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex justify-end pt-2">
+                    <button
+                      onClick={handleNextTask}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg shadow-xs transition-colors cursor-pointer"
+                    >
+                      <span>
+                        {completedTasks.length >= SESSION_QUESTION_LIMIT
+                          ? 'Ergebnis ansehen'
+                          : 'Nächste Frage'}
+                      </span>
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Flashcard Task View with 3D Flip & Layout Stability */}
+          {selectedMode === 'flashcards' && currentTask.mode === 'flashcards' && (
+            <div className="w-full max-w-2xl mx-auto">
+              <div className="relative w-full h-[400px] sm:h-[420px] perspective-1000">
+                <div
+                  className={cn(
+                    'relative w-full h-full preserve-3d transition-transform duration-500 ease-in-out',
+                    isAnswerRevealed && 'rotate-y-180',
+                  )}
+                >
+                  {/* Front Card Face (Question) */}
+                  <div className="absolute inset-0 w-full h-full backface-hidden bg-white border border-slate-200/90 rounded-2xl shadow-sm p-6 sm:p-8 flex flex-col justify-between select-none">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-100 shrink-0">
+                      <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                        Vorderseite · Frage
+                      </span>
+                      <span className="text-xs text-slate-400">
+                        Klicken zum Umdrehen
+                      </span>
+                    </div>
+
+                    <div
+                      onClick={handleFlipFlashcard}
+                      className="flex-1 flex items-center justify-center text-center px-2 sm:px-6 cursor-pointer overflow-y-auto"
+                    >
+                      <h2 className="text-xl sm:text-2xl font-semibold text-slate-900 leading-snug">
+                        {currentTask.question}
+                      </h2>
+                    </div>
+
+                    <div className="pt-4 flex justify-center shrink-0 border-t border-slate-100">
+                      <button
+                        type="button"
+                        onClick={handleFlipFlashcard}
+                        className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold rounded-xl transition-colors cursor-pointer border border-slate-200/80 active:scale-95"
+                      >
+                        <RotateCcw className="w-4 h-4 text-slate-600" />
+                        <span>Karte umdrehen</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Back Card Face (Answer + Evidence) */}
+                  <div className="absolute inset-0 w-full h-full backface-hidden rotate-y-180 bg-white border border-slate-200/90 rounded-2xl shadow-sm p-6 sm:p-8 flex flex-col justify-between">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-100 shrink-0">
+                      <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                        Rückseite · Antwort
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleFlipFlashcard}
+                        className="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1 cursor-pointer"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                        <span>Zurück</span>
+                      </button>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto py-3 space-y-3.5 pr-1">
+                      {isAnswerRevealed && (
+                        <>
+                          <div>
+                            <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                              Frage
+                            </div>
+                            <p className="text-xs sm:text-sm font-medium text-slate-700 bg-slate-50/90 p-3 rounded-xl border border-slate-200/70">
+                              {currentTask.question}
+                            </p>
+                          </div>
+
+                          <div>
+                            <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                              Antwort
+                            </div>
+                            <p className="text-base sm:text-lg font-semibold text-slate-900 leading-relaxed">
+                              {currentTask.answer}
+                            </p>
+                          </div>
+
+                          {currentTask.evidence && (
+                            <div className="p-3 bg-blue-50/40 rounded-xl border border-blue-100 text-xs text-slate-600 italic">
+                              <span className="font-semibold not-italic text-slate-700 block mb-1">
+                                Beleg aus den Quellen:
+                              </span>
+                              „{currentTask.evidence}“
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+
+                    <div className="pt-3 border-t border-slate-100 flex items-center justify-between shrink-0">
+                      <button
+                        type="button"
+                        onClick={handleFlipFlashcard}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 text-slate-600 hover:bg-slate-100 rounded-lg text-xs font-medium transition-colors cursor-pointer"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+                        <span>Vorderseite</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleNextTask}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg shadow-xs transition-colors cursor-pointer"
+                      >
+                        <span>
+                          {completedTasks.length >= SESSION_QUESTION_LIMIT
+                            ? 'Ergebnis ansehen'
+                            : 'Nächste Karte'}
+                        </span>
+                        <ArrowRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Lückentext (Fill-in-the-blank) Task View */}
+          {selectedMode === 'fill-in-the-blank' && currentTask.mode === 'fill-in-the-blank' && (
+            <div className="w-full max-w-2xl mx-auto bg-white border border-slate-200/90 rounded-2xl p-6 sm:p-8 shadow-xs space-y-6">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                  Lückentext · Vervollständige den Satz
+                </span>
+                <span className="text-xs text-slate-400">
+                  {isAnswerRevealed ? '✓ Überprüft' : 'Schlüsselbegriff gesucht'}
+                </span>
+              </div>
+
+              {/* Sentence Display with Blank */}
+              <div className="space-y-4">
+                <div className="p-4 sm:p-5 bg-slate-50/80 rounded-xl border border-slate-200/70 leading-relaxed text-base sm:text-lg text-slate-800">
+                  {(() => {
+                    const parts = currentTask.sentenceWithBlank.split(BLANK_MARKER);
+                    if (parts.length < 2) {
+                      return <span>{currentTask.sentenceWithBlank}</span>;
+                    }
+                    return (
+                      <span>
+                        {parts[0]}
+                        {!isAnswerRevealed ? (
+                          <span className="inline-block border-b-2 border-blue-500 min-w-[100px] text-center font-semibold text-blue-600 px-2 py-0.5 mx-1 bg-blue-50/60 rounded">
+                            {fillBlankInput.trim() ? fillBlankInput : '_____'}
+                          </span>
+                        ) : (
+                          <span
+                            className={cn(
+                              'inline-block px-2.5 py-0.5 mx-1 font-bold rounded border',
+                              fillBlankResult?.isCorrect
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                                : 'bg-red-50 text-red-700 border-red-300 line-through',
+                            )}
+                          >
+                            {fillBlankInput || '—'}
+                          </span>
+                        )}
+                        {parts[1]}
+                      </span>
+                    );
+                  })()}
+                </div>
+              </div>
+
+              {/* Input Form (Before Answer Reveal) */}
+              {!isAnswerRevealed ? (
+                <form onSubmit={handleSubmitFillInBlank} className="space-y-4 pt-2">
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <input
+                      type="text"
+                      value={fillBlankInput}
+                      onChange={(e) => setFillBlankInput(e.target.value)}
+                      placeholder="Gesuchten Begriff eingeben…"
+                      autoFocus
+                      className="flex-1 px-4 py-2.5 rounded-xl border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm font-medium bg-white text-slate-900 shadow-2xs"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!fillBlankInput.trim()}
+                      className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl shadow-xs transition-colors cursor-pointer shrink-0"
+                    >
+                      Prüfen
+                    </button>
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    Tipp: Drücke Enter zum schnellen Überprüfen deiner Antwort.
+                  </p>
+                </form>
+              ) : (
+                /* Feedback & Evidence (After Answer Reveal) */
+                <div className="space-y-5 pt-2 border-t border-slate-100">
+                  <div
                     className={cn(
-                      'w-full p-4 rounded-xl border text-left text-sm transition-all cursor-pointer flex items-center justify-between',
-                      optionStyle,
-                      isAnswerRevealed && 'cursor-default',
+                      'p-4 rounded-xl border flex items-start gap-3',
+                      fillBlankResult?.isCorrect
+                        ? 'bg-emerald-50/70 border-emerald-200 text-emerald-900'
+                        : 'bg-red-50/70 border-red-200 text-red-900',
                     )}
                   >
-                    <span>{option}</span>
-                    {isAnswerRevealed && isCorrect && (
-                      <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 ml-2" />
+                    {fillBlankResult?.isCorrect ? (
+                      <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                    ) : (
+                      <XCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
                     )}
-                    {isAnswerRevealed && isSelected && !isCorrect && (
-                      <XCircle className="w-5 h-5 text-red-600 shrink-0 ml-2" />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Explanation & Evidence after answering */}
-            {isAnswerRevealed && (
-              <div className="space-y-3 pt-4 border-t border-slate-100">
-                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-2">
-                  <div className="flex items-center gap-2 text-xs font-semibold text-slate-700 uppercase tracking-wide">
-                    <span>Erklärung</span>
+                    <div className="space-y-1">
+                      <p className="font-semibold text-sm">
+                        {fillBlankResult?.isCorrect ? 'Richtig!' : 'Nicht ganz'}
+                      </p>
+                      {!fillBlankResult?.isCorrect && (
+                        <p className="text-xs text-slate-700">
+                          Richtige Antwort:{' '}
+                          <span className="font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200">
+                            {currentTask.answer}
+                          </span>
+                        </p>
+                      )}
+                    </div>
                   </div>
-                  <p className="text-sm text-slate-800 leading-relaxed">
-                    {currentTask.explanation}
-                  </p>
+
                   {currentTask.evidence && (
-                    <div className="pt-2 border-t border-slate-200/60 text-xs text-slate-600 italic">
+                    <div className="p-3.5 bg-blue-50/40 rounded-xl border border-blue-100 text-xs text-slate-600 italic">
+                      <span className="font-semibold not-italic text-slate-700 block mb-1">
+                        Beleg aus den Quellen:
+                      </span>
                       „{currentTask.evidence}“
                     </div>
                   )}
-                </div>
 
-                <div className="flex justify-end pt-2">
-                  <button
-                    onClick={handleNextTask}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg shadow-xs transition-colors cursor-pointer"
-                  >
-                    <span>Nächste Frage</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
+                  <div className="flex justify-end pt-2">
+                    <button
+                      type="button"
+                      onClick={handleNextTask}
+                      className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-xl shadow-xs transition-colors cursor-pointer"
+                    >
+                      <span>
+                        {completedTasks.length >= SESSION_QUESTION_LIMIT
+                          ? 'Ergebnis ansehen'
+                          : 'Nächste Aufgabe'}
+                      </span>
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
 
           {/* Sources Grounding Block (Mandatory) */}
-          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs space-y-3">
+          <div className={cn(
+            'bg-white border border-slate-200 rounded-xl p-5 shadow-2xs space-y-3',
+            (selectedMode === 'flashcards' || selectedMode === 'fill-in-the-blank') && 'max-w-2xl mx-auto w-full',
+          )}>
             <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
               <Layers className="w-3.5 h-3.5 text-slate-400" />
               <span>Verifizierte Quellen dieser Aufgabe</span>

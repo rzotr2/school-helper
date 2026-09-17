@@ -84,6 +84,7 @@ describe('retrieveTopicDocuments', () => {
     expect(src.id).toBe('doc-1');
     expect(src.type).toBe('document');
     expect(src.documentId).toBe('doc-1');
+    expect(src.topicId).toBe('topic-a');
     expect(src.documentName).toBe('01_Cloud_Einfuehrung.pdf');
     expect(src.pageNumber).toBe(1);
     expect(src.content).toContain('### Cloud Architekturen');
