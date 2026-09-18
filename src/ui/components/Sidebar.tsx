@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Folder, FileText, Plus, Loader2, GraduationCap, X, BookOpen } from 'lucide-react';
+import React, { useEffect, useState, useMemo } from 'react';
+import { Folder, FileText, Plus, Loader2, GraduationCap, X, BookOpen, ChevronRight } from 'lucide-react';
 import { NavLink, useLocation, Link } from 'react-router-dom';
 import { cn } from '../../shared/utils/cn';
 import { useAuth } from '../../infrastructure/auth/AuthContext';
@@ -10,6 +10,11 @@ import {
   SUBJECTS_CHANGED_EVENT,
   notifySubjectsChanged,
 } from '../../application/use-cases/subjects';
+import {
+  Topic,
+  getAllTopics,
+  TOPICS_CHANGED_EVENT,
+} from '../../application/use-cases/topics';
 import { getSchoolProfile, createSchoolProfile } from '../../application/use-cases/schoolProfile';
 import { NameDialog } from './NameDialog';
 
@@ -21,6 +26,8 @@ interface SidebarProps {
 export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
   const { user, isLoading: isAuthLoading } = useAuth();
   const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [topics, setTopics] = useState<Topic[]>([]);
+  const [expandedSubjectIds, setExpandedSubjectIds] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const location = useLocation();
@@ -35,10 +42,14 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
         await createSchoolProfile(user.id);
       }
       
-      const loadedSubjects = await getSubjects(user.id);
+      const [loadedSubjects, loadedTopics] = await Promise.all([
+        getSubjects(user.id),
+        getAllTopics(user.id),
+      ]);
       setSubjects(loadedSubjects);
+      setTopics(loadedTopics);
     } catch (error) {
-      console.error("Failed to load subjects:", error);
+      console.error("Failed to load subjects and topics:", error);
     } finally {
       setIsLoading(false);
     }
@@ -51,14 +62,55 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
   }, [user, isAuthLoading]);
 
   useEffect(() => {
-    const handleSubjectsChanged = () => {
+    const handleDataChanged = () => {
       void loadData();
     };
-    window.addEventListener(SUBJECTS_CHANGED_EVENT, handleSubjectsChanged);
+    window.addEventListener(SUBJECTS_CHANGED_EVENT, handleDataChanged);
+    window.addEventListener(TOPICS_CHANGED_EVENT, handleDataChanged);
     return () => {
-      window.removeEventListener(SUBJECTS_CHANGED_EVENT, handleSubjectsChanged);
+      window.removeEventListener(SUBJECTS_CHANGED_EVENT, handleDataChanged);
+      window.removeEventListener(TOPICS_CHANGED_EVENT, handleDataChanged);
     };
   }, [user, isAuthLoading]);
+
+  // Group topics by subject ID
+  const topicsBySubject = useMemo(() => {
+    const map = new Map<string, Topic[]>();
+    for (const topic of topics) {
+      const list = map.get(topic.subjectId) ?? [];
+      list.push(topic);
+      map.set(topic.subjectId, list);
+    }
+    return map;
+  }, [topics]);
+
+  // If the current route is a TopicPage or SubjectPage, auto-expand that subject
+  useEffect(() => {
+    const topicMatch = location.pathname.match(/^\/subject\/([^/]+)\/topic\/([^/]+)/);
+    if (topicMatch) {
+      const activeSubjectId = topicMatch[1];
+      setExpandedSubjectIds((prev) => {
+        if (prev.has(activeSubjectId)) return prev;
+        const next = new Set(prev);
+        next.add(activeSubjectId);
+        return next;
+      });
+    }
+  }, [location.pathname]);
+
+  const toggleSubjectExpanded = (subjectId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setExpandedSubjectIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(subjectId)) {
+        next.delete(subjectId);
+      } else {
+        next.add(subjectId);
+      }
+      return next;
+    });
+  };
 
   // Close mobile drawer on route change
   useEffect(() => {
@@ -154,22 +206,91 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
               Noch keine Fächer
             </div>
           ) : (
-            subjects.map((subject) => (
-              <NavLink
-                key={subject.id}
-                to={`/subject/${subject.id}`}
-                onClick={handleLinkClick}
-                className={({ isActive }) =>
-                  cn(
-                    "flex items-center gap-2 px-2 py-1.5 text-sm rounded-md transition-[background-color,color] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40",
-                    isActive ? "bg-blue-50 text-blue-700 font-medium" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                  )
-                }
-              >
-                <Folder className="w-4 h-4 shrink-0 text-slate-400" />
-                <span className="truncate">{subject.name}</span>
-              </NavLink>
-            ))
+            subjects.map((subject) => {
+              const subjectTopics = topicsBySubject.get(subject.id) ?? [];
+              const hasTopics = subjectTopics.length > 0;
+              const isExpanded = expandedSubjectIds.has(subject.id);
+              const isSubjectRouteActive =
+                location.pathname === `/subject/${subject.id}` ||
+                location.pathname.startsWith(`/subject/${subject.id}/`);
+
+              return (
+                <div key={subject.id} className="space-y-0.5">
+                  <div className="flex items-center group rounded-md transition-colors duration-150">
+                    {/* Left: Main navigation area */}
+                    <NavLink
+                      to={`/subject/${subject.id}`}
+                      onClick={handleLinkClick}
+                      className={cn(
+                        "flex items-center gap-2 px-2 py-1.5 text-sm rounded-md transition-[background-color,color] duration-150 flex-1 min-w-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40",
+                        location.pathname === `/subject/${subject.id}`
+                          ? "bg-blue-50 text-blue-700 font-medium"
+                          : isSubjectRouteActive
+                            ? "text-blue-900 font-medium hover:bg-slate-100/80"
+                            : "text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+                      )}
+                    >
+                      <Folder
+                        className={cn(
+                          "w-4 h-4 shrink-0 transition-colors duration-150",
+                          isSubjectRouteActive ? "text-blue-600" : "text-slate-400"
+                        )}
+                      />
+                      <span className="truncate">{subject.name}</span>
+                    </NavLink>
+
+                    {/* Right: Reserved toggle chevron button */}
+                    {hasTopics ? (
+                      <button
+                        type="button"
+                        onClick={(e) => toggleSubjectExpanded(subject.id, e)}
+                        className={cn(
+                          "w-7 h-7 flex items-center justify-center rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 shrink-0 transition-[transform,color,background-color] duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40",
+                        )}
+                        aria-expanded={isExpanded}
+                        aria-label={`${subject.name} Themen ${isExpanded ? 'einklappen' : 'ausklappen'}`}
+                        title={isExpanded ? 'Einklappen' : 'Ausklappen'}
+                      >
+                        <ChevronRight
+                          className={cn(
+                            "w-3.5 h-3.5 transition-transform duration-150",
+                            isExpanded && "rotate-90 text-slate-600"
+                          )}
+                        />
+                      </button>
+                    ) : (
+                      <div className="w-7 h-7 shrink-0" aria-hidden="true" />
+                    )}
+                  </div>
+
+                  {/* Expanded Topics List */}
+                  {hasTopics && isExpanded && (
+                    <div className="pl-6 pr-1 py-0.5 space-y-0.5 border-l-2 border-slate-100 ml-4">
+                      {subjectTopics.map((topic) => {
+                        const isTopicActive =
+                          location.pathname === `/subject/${subject.id}/topic/${topic.id}`;
+
+                        return (
+                          <NavLink
+                            key={topic.id}
+                            to={`/subject/${subject.id}/topic/${topic.id}`}
+                            onClick={handleLinkClick}
+                            className={cn(
+                              "flex items-center gap-2 px-2 py-1 text-xs rounded-md transition-[background-color,color] duration-150 truncate focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40",
+                              isTopicActive
+                                ? "bg-blue-50 text-blue-700 font-semibold"
+                                : "text-slate-500 hover:bg-slate-100 hover:text-slate-800 font-normal"
+                            )}
+                          >
+                            <span className="truncate">{topic.name}</span>
+                          </NavLink>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })
           )}
         </nav>
       </div>

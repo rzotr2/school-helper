@@ -11,6 +11,7 @@ import * as docsApi from '../../application/use-cases/documents';
 import * as docRetApi from '../../application/use-cases/learning/documentRetrieval';
 import * as webRetApi from '../../application/use-cases/learning/webRetrieval';
 import * as generatorApi from '../../application/use-cases/learning/learnGenerator';
+import type { WordBankTask } from '../../application/use-cases/learning/learningTypes';
 
 // Configure React 19 act environment for jsdom
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -31,6 +32,7 @@ describe('LearnPage component', () => {
 
     vi.spyOn(subjectsApi, 'getSubjects').mockResolvedValue([
       { id: 'sub-1', ownerId: 'test-user', name: 'Informatik', position: 0, createdAt: new Date(), updatedAt: new Date() },
+      { id: 'sub-2', ownerId: 'test-user', name: 'Mathematik', position: 1, createdAt: new Date(), updatedAt: new Date() },
     ]);
 
     vi.spyOn(topicsApi, 'getAllTopics').mockResolvedValue([
@@ -97,12 +99,27 @@ describe('LearnPage component', () => {
     return root;
   };
 
-  it('renders subject and topic selection steps properly', async () => {
+  it('renders subject and topic selection steps properly with topic count badges', async () => {
     await renderComponent();
 
     expect(container.textContent).toContain('Lernen');
     expect(container.textContent).toContain('1. Fach auswählen');
     expect(container.textContent).toContain('Informatik');
+    expect(container.textContent).toContain('Mathematik');
+
+    // Subject topic count badges: Informatik has 2 topics, Mathematik has 0 topics
+    const infoSubjectBtn = Array.from(container.querySelectorAll('button')).find((btn) =>
+      btn.textContent?.includes('Informatik'),
+    );
+    expect(infoSubjectBtn).toBeDefined();
+    expect(infoSubjectBtn?.textContent).toContain('2');
+
+    const mathSubjectBtn = Array.from(container.querySelectorAll('button')).find((btn) =>
+      btn.textContent?.includes('Mathematik'),
+    );
+    expect(mathSubjectBtn).toBeDefined();
+    expect(mathSubjectBtn?.textContent).toContain('0');
+
     expect(container.textContent).toContain('2. Themen auswählen');
     expect(container.textContent).toContain('Cloud-Management');
     expect(container.textContent).toContain('Netzwerke');
@@ -556,5 +573,197 @@ describe('LearnPage component', () => {
     expect(container.textContent).toContain('AWS Docs');
     expect(container.textContent).toContain('Nächste Aufgabe');
   });
+
+  it('handles WordBank (Lückentext mit Wörtern) mode: placing words, checking, correction, and verification', async () => {
+    const mockWordBankTask: WordBankTask = {
+      id: 'wb-task-1',
+      mode: 'word-bank',
+      topicId: 'top-1',
+      difficulty: 'mittel',
+      instruction: 'Setze die passenden Cloud-Konzepte in die Lücken ein.',
+      textWithBlanks: 'Eine {{blank-1}} bietet Basisinfrastruktur, während {{blank-2}} Anwendungssoftware bereitstellt.',
+      blanks: [
+        {
+          id: 'blank-1',
+          answer: 'IaaS-Lösung',
+          evidence: 'IaaS bietet grundlegende Rechen- und Speicherressourcen.',
+          sourceIds: ['doc-1'],
+        },
+        {
+          id: 'blank-2',
+          answer: 'SaaS',
+          evidence: 'SaaS liefert fertige Software.',
+          sourceIds: ['web-1'],
+        },
+      ],
+      words: ['IaaS-Lösung', 'SaaS', 'On-Premises', 'Blockchain'],
+      sourceIds: ['doc-1', 'web-1'],
+    };
+
+    const mockGenWordBank = vi
+      .spyOn(generatorApi, 'generateWordBankTask')
+      .mockResolvedValue(mockWordBankTask);
+
+    await renderComponent();
+
+    // Select topic
+    const topicBtn = Array.from(container.querySelectorAll('button')).find((btn) =>
+      btn.textContent?.includes('Cloud-Management'),
+    );
+    await act(async () => {
+      topicBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    // Select "Wortbank" mode
+    const wordBankModeBtn = Array.from(container.querySelectorAll('button')).find((btn) =>
+      btn.textContent?.includes('Wortbank'),
+    );
+    expect(wordBankModeBtn).toBeDefined();
+
+    await act(async () => {
+      wordBankModeBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(container.textContent).toContain('Lernsession starten (5 Aufgaben)');
+
+    // Start session
+    const startBtn = Array.from(container.querySelectorAll('button')).find((btn) =>
+      btn.textContent?.includes('Lernsession starten'),
+    );
+    await act(async () => {
+      startBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(mockGenWordBank).toHaveBeenCalledTimes(1);
+
+    // Verify task rendering
+    expect(container.textContent).toContain('Aufgabe 1 von 5');
+    expect(container.textContent).toContain('Setze die passenden Cloud-Konzepte in die Lücken ein.');
+    expect(container.textContent).toContain('Wortbank · 0 von 2 Lücken gefüllt');
+    expect(container.textContent).toContain('[ Lücke 1 ]');
+    expect(container.textContent).toContain('[ Lücke 2 ]');
+    expect(container.textContent).toContain('Verfügbare Wörter (4 übrig)');
+    expect(container.textContent).toContain('IaaS-Lösung');
+    expect(container.textContent).toContain('SaaS');
+    expect(container.textContent).toContain('On-Premises');
+    expect(container.textContent).toContain('Blockchain');
+
+    // Prüfen button should be disabled because not all blanks are filled
+    const checkBtn = Array.from(container.querySelectorAll('button')).find(
+      (btn) => btn.textContent?.trim() === 'Prüfen',
+    ) as HTMLButtonElement | undefined;
+    expect(checkBtn).toBeDefined();
+    expect(checkBtn?.disabled).toBe(true);
+
+    // Test Tap/Click interaction: select word chip 'Blockchain' (incorrect distractor)
+    const blockchainChip = Array.from(container.querySelectorAll('button')).find(
+      (btn) => btn.textContent?.trim() === 'Blockchain',
+    );
+    expect(blockchainChip).toBeDefined();
+    await act(async () => {
+      blockchainChip?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(blockchainChip?.getAttribute('aria-pressed')).toBe('true');
+    expect(container.textContent).toContain('Ausgewählt: „Blockchain“');
+
+    // Click on blank 1 to place 'Blockchain'
+    const blank1Slot = Array.from(container.querySelectorAll('button')).find(
+      (btn) => btn.getAttribute('aria-label')?.includes('Lücke 1'),
+    );
+    expect(blank1Slot).toBeDefined();
+    await act(async () => {
+      blank1Slot?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    // Blank 1 now contains 'Blockchain'
+    expect(container.textContent).toContain('Wortbank · 1 von 2 Lücken gefüllt');
+    expect(container.textContent).toContain('Blockchain');
+
+    // Now test drag-and-drop interaction for blank 2: drop 'SaaS' into blank 2
+    const blank2Slot = Array.from(container.querySelectorAll('button')).find(
+      (btn) => btn.getAttribute('aria-label')?.includes('Lücke 2'),
+    );
+    expect(blank2Slot).toBeDefined();
+
+    const mockDataTransfer = {
+      data: {} as Record<string, string>,
+      setData(format: string, val: string) {
+        this.data[format] = val;
+      },
+      getData(format: string) {
+        return this.data[format] || '';
+      },
+      dropEffect: 'none',
+      effectAllowed: 'all',
+    };
+
+    const dropEvent = new Event('drop', { bubbles: true }) as any;
+    dropEvent.dataTransfer = mockDataTransfer;
+    mockDataTransfer.setData('text/plain', 'SaaS');
+
+    await act(async () => {
+      blank2Slot?.dispatchEvent(dropEvent);
+    });
+
+    // Both blanks are now filled (2 of 2)
+    expect(container.textContent).toContain('Wortbank · 2 von 2 Lücken gefüllt');
+    expect(checkBtn?.disabled).toBe(false);
+
+    // Check answers: blank 1 has 'Blockchain' (wrong), blank 2 has 'SaaS' (correct)
+    await act(async () => {
+      checkBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    // Should indicate incorrect state without advancing
+    expect(container.textContent).toContain('Einige Lücken sind noch fehlerhaft');
+    expect(container.textContent).not.toContain('Alles richtig ausgefüllt!');
+
+    // Remove 'Blockchain' from blank 1 using its clear button
+    const removeBtn = Array.from(container.querySelectorAll('button')).find(
+      (btn) => btn.getAttribute('aria-label')?.includes('Entferne Blockchain'),
+    );
+    expect(removeBtn).toBeDefined();
+    await act(async () => {
+      removeBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(container.textContent).toContain('Wortbank · 1 von 2 Lücken gefüllt');
+    expect(container.textContent).toContain('[ Lücke 1 ]');
+
+    // Now select correct word 'IaaS-Lösung' and place in blank 1
+    const iaasChip = Array.from(container.querySelectorAll('button')).find(
+      (btn) => btn.textContent?.trim() === 'IaaS-Lösung',
+    );
+    await act(async () => {
+      iaasChip?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    const blank1SlotAgain = Array.from(container.querySelectorAll('button')).find(
+      (btn) => btn.getAttribute('aria-label')?.includes('Lücke 1'),
+    );
+    await act(async () => {
+      blank1SlotAgain?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    // Now all are correct: blank 1 = 'IaaS-Lösung', blank 2 = 'SaaS'
+    expect(container.textContent).toContain('Wortbank · 2 von 2 Lücken gefüllt');
+
+    // Click Prüfen again
+    const checkBtnAgain = Array.from(container.querySelectorAll('button')).find(
+      (btn) => btn.textContent?.trim() === 'Prüfen',
+    );
+    await act(async () => {
+      checkBtnAgain?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    // Success banner & evidence should now be visible
+    expect(container.textContent).toContain('Alles richtig ausgefüllt!');
+    expect(container.textContent).toContain('Alle 2 Lücken wurden korrekt mit den Begriffen belegt.');
+    expect(container.textContent).toContain('Belege aus den Quellen:');
+    expect(container.textContent).toContain('IaaS bietet grundlegende Rechen- und Speicherressourcen.');
+    expect(container.textContent).toContain('SaaS liefert fertige Software.');
+    expect(container.textContent).toContain('Verifizierte Quellen dieser Aufgabe');
+    expect(container.textContent).toContain('Nächste Aufgabe');
+  });
 });
+
 

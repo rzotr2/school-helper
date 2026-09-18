@@ -11,6 +11,14 @@ export interface Topic {
   updatedAt: Date;
 }
 
+export const TOPICS_CHANGED_EVENT = 'school-helper:topics-changed';
+
+export function notifyTopicsChanged(): void {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(TOPICS_CHANGED_EVENT));
+  }
+}
+
 type TopicRow = Database['public']['Tables']['topics']['Row'];
 
 const TOPIC_COLUMNS = 'id, owner_id, subject_id, name, position, created_at, updated_at';
@@ -138,6 +146,7 @@ export async function createTopic(userId: string, subjectId: string, name: strin
 
   if (error) throw new Error(error.message);
 
+  notifyTopicsChanged();
   return mapTopic(created);
 }
 
@@ -174,6 +183,7 @@ export async function updateTopic(userId: string, topicId: string, name: string)
     .eq('id', topicId);
 
   if (error) throw new Error(error.message);
+  notifyTopicsChanged();
 }
 
 /**
@@ -229,4 +239,5 @@ export async function deleteTopic(userId: string, topicId: string): Promise<void
     .eq('id', topicId);
 
   if (deleteTopicError) throw new Error(deleteTopicError.message);
+  notifyTopicsChanged();
 }

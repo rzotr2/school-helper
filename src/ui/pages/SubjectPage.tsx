@@ -181,9 +181,10 @@ export function SubjectPage() {
                 key={topic.id}
                 className="group relative flex items-center justify-between p-3.5 sm:p-4 bg-white border border-slate-200/90 rounded-lg shadow-2xs hover:border-slate-300 hover:shadow-xs transition-[border-color,box-shadow] duration-150 gap-3 w-full min-w-0 max-w-full overflow-hidden"
               >
+                {/* Primary full-card navigation link covering the whole card */}
                 <Link 
                   to={`/subject/${subject.id}/topic/${topic.id}`} 
-                  className="flex items-center gap-3.5 flex-1 min-w-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 rounded-md py-0.5 overflow-hidden"
+                  className="flex items-center gap-3.5 flex-1 min-w-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 rounded-md py-0.5 overflow-hidden after:absolute after:inset-0 after:content-['']"
                 >
                   <div className="w-10 h-10 rounded-lg bg-blue-50/80 text-blue-600 border border-blue-100/70 flex items-center justify-center shrink-0 transition-transform duration-150 group-hover:scale-[1.03]">
                     <Folder className="w-5 h-5" />
@@ -198,9 +199,14 @@ export function SubjectPage() {
                   </div>
                 </Link>
                 
-                <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100 transition-opacity duration-150 shrink-0">
+                {/* Secondary independent actions (elevated above stretched link) */}
+                <div className="relative z-10 flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100 transition-opacity duration-150 shrink-0">
                   <button
-                    onClick={() => setEditingTopic(topic)}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingTopic(topic);
+                    }}
                     aria-label={`Thema "${topic.name}" umbenennen`}
                     title="Umbenennen"
                     className="p-1.5 sm:p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-[background-color,color,transform] duration-150 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 cursor-pointer"
@@ -208,7 +214,11 @@ export function SubjectPage() {
                     <Edit2 className="w-4 h-4" />
                   </button>
                   <button
-                    onClick={() => setDeletingTopic(topic)}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeletingTopic(topic);
+                    }}
                     aria-label={`Thema "${topic.name}" löschen`}
                     title="Löschen"
                     className="p-1.5 sm:p-2 text-slate-400 hover:text-red-600 hover:bg-red-50/80 rounded-md transition-[background-color,color,transform] duration-150 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 cursor-pointer"

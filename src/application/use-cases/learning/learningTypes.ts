@@ -5,7 +5,7 @@
  * grounded in retrieved sources (user documents + verified web sources).
  */
 
-export type LearningMode = 'quiz' | 'flashcards' | 'fill-in-the-blank' | 'matching';
+export type LearningMode = 'quiz' | 'flashcards' | 'fill-in-the-blank' | 'matching' | 'word-bank';
 
 export type LearningDifficulty = 'leicht' | 'mittel' | 'schwer';
 
@@ -100,7 +100,40 @@ export interface MatchingTask {
   sourceIds: string[];
 }
 
-export type LearningTask = QuizTask | FlashcardTask | FillInBlankTask | MatchingTask;
+export interface WordBankBlank {
+  /** Stable identifier referenced in the text as {{blankId}}, e.g. "blank-1" */
+  id: string;
+  /** The correct word or phrase that belongs in this blank */
+  answer: string;
+  /** Verified source IDs from GroundedKnowledgeContext that back this blank */
+  sourceIds: string[];
+  /** Direct quote or factual evidence proving this blank's answer */
+  evidence: string;
+}
+
+export interface WordBankTask {
+  id: string;
+  mode: 'word-bank';
+  topicId: string;
+  topicName?: string;
+  difficulty?: LearningDifficulty;
+  instruction: string;
+  /** Full educational text containing placeholders like {{blank-1}}, {{blank-2}} */
+  textWithBlanks: string;
+  /** Definitions and answers for each blank */
+  blanks: WordBankBlank[];
+  /** Shuffled word bank chips (4-8 items, containing all correct answers + grounded distractors) */
+  words: string[];
+  /** Combined source IDs referenced by the task */
+  sourceIds: string[];
+}
+
+export type LearningTask =
+  | QuizTask
+  | FlashcardTask
+  | FillInBlankTask
+  | MatchingTask
+  | WordBankTask;
 
 export interface CompletedQuizTask {
   task: QuizTask;
@@ -127,11 +160,22 @@ export interface CompletedMatchingTask {
   completedAt: string;
 }
 
+export interface CompletedWordBankTask {
+  task: WordBankTask;
+  /** Map of blankId -> word placed by user */
+  userPlacements: Record<string, string>;
+  correctBlanksCount: number;
+  totalBlanksCount: number;
+  isFullyCorrect: boolean;
+  completedAt: string;
+}
+
 export type CompletedTask =
   | CompletedQuizTask
   | CompletedFlashcardTask
   | CompletedFillInBlankTask
-  | CompletedMatchingTask;
+  | CompletedMatchingTask
+  | CompletedWordBankTask;
 
 export interface QuizSessionSummary {
   totalQuestions: number;
@@ -174,3 +218,16 @@ export interface MatchingSessionSummary {
     pairs: number;
   }>;
 }
+
+export interface WordBankSessionSummary {
+  totalTasks: number;
+  totalBlanks: number;
+  correctBlanks: number;
+  byTopic: Array<{
+    topicId: string;
+    topicName: string;
+    total: number;
+    correct: number;
+  }>;
+}
+

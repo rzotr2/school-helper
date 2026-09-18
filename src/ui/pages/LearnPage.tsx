@@ -8,6 +8,7 @@ import {
   ExternalLink,
   CheckCircle2,
   XCircle,
+  X,
   AlertCircle,
   Loader2,
   RotateCcw,
@@ -16,6 +17,7 @@ import {
   Trophy,
   BarChart2,
   GitCompare,
+  LayoutGrid,
 } from 'lucide-react';
 import { useAuth } from '../../infrastructure/auth/AuthContext';
 import { Subject, getSubjects } from '../../application/use-cases/subjects';
@@ -28,8 +30,10 @@ import {
   generateFlashcardTask,
   generateFillInBlankTask,
   generateMatchingTask,
+  generateWordBankTask,
   BLANK_MARKER,
   checkFillInBlankAnswer,
+  checkWordBankAnswer,
 } from '../../application/use-cases/learning/learnGenerator';
 import type {
   CompletedTask,
@@ -37,6 +41,7 @@ import type {
   CompletedFlashcardTask,
   CompletedFillInBlankTask,
   CompletedMatchingTask,
+  CompletedWordBankTask,
   FillInBlankSessionSummary,
   FillInBlankTask,
   FlashcardSessionSummary,
@@ -51,6 +56,9 @@ import type {
   MatchingTask,
   QuizSessionSummary,
   QuizTask,
+  WordBankBlank,
+  WordBankSessionSummary,
+  WordBankTask,
 } from '../../application/use-cases/learning/learningTypes';
 import { cn } from '../../shared/utils/cn';
 
@@ -90,6 +98,11 @@ export function LearnPage() {
   const [selectedLeftId, setSelectedLeftId] = useState<string | null>(null);
   const [matchedPairIds, setMatchedPairIds] = useState<string[]>([]);
   const [mismatchAttempt, setMismatchAttempt] = useState<{ leftId: string; rightId: string } | null>(null);
+
+  // Interaction State for Wortbank (Word Bank)
+  const [wordBankPlacements, setWordBankPlacements] = useState<Record<string, string>>({});
+  const [selectedWordBankToken, setSelectedWordBankToken] = useState<string | null>(null);
+  const [wordBankChecked, setWordBankChecked] = useState(false);
 
   useEffect(() => {
     async function loadTaxonomy() {
@@ -131,6 +144,15 @@ export function LearnPage() {
     return counts;
   }, [documents]);
 
+  // Topic count per subject derived from loaded topics
+  const topicCountBySubject = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const t of topics) {
+      counts.set(t.subjectId, (counts.get(t.subjectId) ?? 0) + 1);
+    }
+    return counts;
+  }, [topics]);
+
   // Topics belonging to the selected subject
   const availableTopics = useMemo(() => {
     if (!selectedSubjectId) return [];
@@ -162,6 +184,9 @@ export function LearnPage() {
     setSelectedLeftId(null);
     setMatchedPairIds([]);
     setMismatchAttempt(null);
+    setWordBankPlacements({});
+    setSelectedWordBankToken(null);
+    setWordBankChecked(false);
     setError(null);
   };
 
@@ -270,7 +295,9 @@ export function LearnPage() {
             ? 'Erstelle quellenbasierten Lückentext…'
             : selectedMode === 'matching'
               ? 'Erstelle quellenbasierte Zuordnungsaufgabe…'
-              : 'Erstelle quellenbasierte Quiz-Aufgabe…',
+              : selectedMode === 'word-bank'
+                ? 'Erstelle quellenbasierte Wortbank-Aufgabe…'
+                : 'Erstelle quellenbasierte Quiz-Aufgabe…',
       );
       const { targetTopicId, targetTopicName } = getNextTargetTopic(context, []);
       let task: LearningTask;
@@ -288,6 +315,12 @@ export function LearnPage() {
         });
       } else if (selectedMode === 'matching') {
         task = await generateMatchingTask(context, {
+          targetTopicId,
+          targetTopicName,
+          difficulty,
+        });
+      } else if (selectedMode === 'word-bank') {
+        task = await generateWordBankTask(context, {
           targetTopicId,
           targetTopicName,
           difficulty,
@@ -406,6 +439,70 @@ export function LearnPage() {
     }
   };
 
+  // --- Wortbank (Word-Bank) Handlers ---
+
+  const handleSelectWordBankToken = (word: string) => {
+    if (wordBankChecked && isAnswerRevealed) return;
+    setSelectedWordBankToken((prev) => (prev === word ? null : word));
+  };
+
+  const handlePlaceWordInBlank = (blankId: string, wordToPlace?: string) => {
+    if (wordBankChecked && isAnswerRevealed) return;
+    const word = wordToPlace || selectedWordBankToken;
+    if (!word) return;
+
+    setWordBankPlacements((prev) => {
+      const next = { ...prev };
+      // If this word was already placed in another blank, remove it from there
+      for (const [bId, w] of Object.entries(next)) {
+        if (w === word) {
+          delete next[bId];
+        }
+      }
+      next[blankId] = word;
+      return next;
+    });
+
+    setSelectedWordBankToken(null);
+  };
+
+  const handleRemoveWordFromBlank = (blankId: string) => {
+    if (wordBankChecked && isAnswerRevealed) return;
+    setWordBankPlacements((prev) => {
+      const next = { ...prev };
+      delete next[blankId];
+      return next;
+    });
+  };
+
+  const handleCheckWordBank = () => {
+    if (!currentTask || currentTask.mode !== 'word-bank') return;
+    setWordBankChecked(true);
+
+    let correctBlanksCount = 0;
+    for (const blank of currentTask.blanks) {
+      const userWord = wordBankPlacements[blank.id] || '';
+      if (checkWordBankAnswer(userWord, blank.answer)) {
+        correctBlanksCount += 1;
+      }
+    }
+
+    const isFullyCorrect = correctBlanksCount === currentTask.blanks.length;
+    if (isFullyCorrect) {
+      setIsAnswerRevealed(true);
+      const completedRecord: CompletedWordBankTask = {
+        task: currentTask,
+        userPlacements: { ...wordBankPlacements },
+        correctBlanksCount,
+        totalBlanksCount: currentTask.blanks.length,
+        isFullyCorrect: true,
+        completedAt: new Date().toISOString(),
+      };
+      setCompletedTasks((prev) => [...prev, completedRecord]);
+    }
+  };
+
+
   const handleNextTask = async () => {
     if (!knowledgeContext) return;
 
@@ -423,6 +520,9 @@ export function LearnPage() {
     setSelectedLeftId(null);
     setMatchedPairIds([]);
     setMismatchAttempt(null);
+    setWordBankPlacements({});
+    setSelectedWordBankToken(null);
+    setWordBankChecked(false);
     setGenerationStep('Generiere nächste Aufgabe auf Basis der Quellen…');
 
     try {
@@ -455,6 +555,12 @@ export function LearnPage() {
         });
       } else if (selectedMode === 'matching') {
         task = await generateMatchingTask(knowledgeContext, {
+          targetTopicId,
+          targetTopicName,
+          difficulty,
+        });
+      } else if (selectedMode === 'word-bank') {
+        task = await generateWordBankTask(knowledgeContext, {
           targetTopicId,
           targetTopicName,
           difficulty,
@@ -638,6 +744,54 @@ export function LearnPage() {
     };
   }, [isSessionComplete, completedTasks, knowledgeContext, selectedMode]);
 
+  const wordBankSummary: WordBankSessionSummary | null = useMemo(() => {
+    if (
+      !isSessionComplete ||
+      completedTasks.length === 0 ||
+      !knowledgeContext ||
+      selectedMode !== 'word-bank'
+    ) {
+      return null;
+    }
+
+    const byTopicMap = new Map<string, { total: number; correct: number }>();
+    knowledgeContext.topicIds.forEach((tId) => {
+      byTopicMap.set(tId, { total: 0, correct: 0 });
+    });
+
+    let totalBlanks = 0;
+    let correctBlanks = 0;
+
+    completedTasks.forEach((c) => {
+      if ('totalBlanksCount' in c) {
+        totalBlanks += c.totalBlanksCount;
+        correctBlanks += c.correctBlanksCount;
+        const current = byTopicMap.get(c.task.topicId) ?? { total: 0, correct: 0 };
+        byTopicMap.set(c.task.topicId, {
+          total: current.total + c.totalBlanksCount,
+          correct: current.correct + c.correctBlanksCount,
+        });
+      }
+    });
+
+    const byTopic = knowledgeContext.topicIds.map((tId, idx) => {
+      const stats = byTopicMap.get(tId) ?? { total: 0, correct: 0 };
+      return {
+        topicId: tId,
+        topicName: knowledgeContext.topicNames[idx] || tId,
+        total: stats.total,
+        correct: stats.correct,
+      };
+    });
+
+    return {
+      totalTasks: completedTasks.length,
+      totalBlanks,
+      correctBlanks,
+      byTopic,
+    };
+  }, [isSessionComplete, completedTasks, knowledgeContext, selectedMode]);
+
   // Find referenced sources for the current task
   const referencedSources = useMemo(() => {
     if (!currentTask || !knowledgeContext) return [];
@@ -702,20 +856,36 @@ export function LearnPage() {
               <p className="text-sm text-slate-400 italic">Noch keine Fächer angelegt.</p>
             ) : (
               <div className="flex flex-wrap gap-2">
-                {subjects.map((s) => (
-                  <button
-                    key={s.id}
-                    onClick={() => handleSelectSubject(s.id)}
-                    className={cn(
-                      'flex-grow sm:flex-initial min-w-[120px] text-center justify-center px-3.5 py-2 rounded-lg text-sm font-medium transition-[background-color,border-color,box-shadow,color,transform] duration-150 active:scale-[0.98] cursor-pointer border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
-                      selectedSubjectId === s.id
-                        ? 'bg-blue-50 border-blue-300 text-blue-800 shadow-2xs font-semibold'
-                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50',
-                    )}
-                  >
-                    {s.name}
-                  </button>
-                ))}
+                {subjects.map((s) => {
+                  const topicCount = topicCountBySubject.get(s.id) ?? 0;
+                  const isSelected = selectedSubjectId === s.id;
+
+                  return (
+                    <button
+                      key={s.id}
+                      onClick={() => handleSelectSubject(s.id)}
+                      className={cn(
+                        'flex-grow sm:flex-initial min-w-[140px] px-3.5 py-2 rounded-lg text-sm font-medium transition-[background-color,border-color,box-shadow,color,transform] duration-150 active:scale-[0.98] cursor-pointer border flex items-center justify-between gap-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 select-none',
+                        isSelected
+                          ? 'bg-blue-50 border-blue-300 text-blue-900 shadow-2xs font-semibold'
+                          : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50',
+                      )}
+                    >
+                      <span className="truncate text-left">{s.name}</span>
+                      <span
+                        className={cn(
+                          'text-[10px] tabular-nums font-semibold px-1.5 py-0.5 rounded-full shrink-0 min-w-[20px] text-center transition-colors duration-150',
+                          isSelected
+                            ? 'bg-blue-200/70 text-blue-800'
+                            : 'bg-slate-100 text-slate-500',
+                        )}
+                        aria-label={`${topicCount} ${topicCount === 1 ? 'Thema' : 'Themen'}`}
+                      >
+                        {topicCount}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -958,6 +1128,30 @@ export function LearnPage() {
                       </span>
                     )}
                   </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedMode('word-bank')}
+                    className={cn(
+                      'p-3.5 rounded-xl border text-left transition-[background-color,border-color,box-shadow,transform] duration-150 active:scale-[0.99] cursor-pointer flex flex-col justify-between focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
+                      selectedMode === 'word-bank'
+                        ? 'border-blue-500 bg-blue-50/50 shadow-2xs'
+                        : 'border-slate-200 bg-white hover:bg-slate-50',
+                    )}
+                  >
+                    <div>
+                      <div className="font-semibold text-sm text-slate-900">Wortbank</div>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Begriffe per Drag &amp; Drop oder Klick in Lücken einsetzen.
+                      </p>
+                    </div>
+                    {selectedMode === 'word-bank' && (
+                      <span className="text-[11px] font-semibold text-blue-600 mt-3 inline-flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        Ausgewählt
+                      </span>
+                    )}
+                  </button>
                 </div>
               </div>
             </div>
@@ -982,7 +1176,7 @@ export function LearnPage() {
                   Lernsession starten ({SESSION_QUESTION_LIMIT}{' '}
                   {selectedMode === 'flashcards'
                     ? 'Karten'
-                    : selectedMode === 'matching' || selectedMode === 'fill-in-the-blank'
+                    : selectedMode === 'matching' || selectedMode === 'fill-in-the-blank' || selectedMode === 'word-bank'
                       ? 'Aufgaben'
                       : 'Fragen'})
                 </span>
@@ -1005,16 +1199,16 @@ export function LearnPage() {
       )}
 
       {/* Session Completed Summary Screen */}
-      {isSessionComplete && (quizSummary || flashcardSummary || fillBlankSummary || matchingSummary) && !isGenerating && (
+      {isSessionComplete && (quizSummary || flashcardSummary || fillBlankSummary || matchingSummary || wordBankSummary) && !isGenerating && (
         <div className="bg-white border border-slate-200/90 rounded-xl p-5 sm:p-8 shadow-2xs space-y-6">
           <div className="text-center space-y-2">
             <div className={cn(
               'w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-2',
-              selectedMode === 'flashcards' || selectedMode === 'matching'
+              selectedMode === 'flashcards' || selectedMode === 'matching' || selectedMode === 'word-bank'
                 ? 'bg-blue-50/90 text-blue-600 border border-blue-100/80'
                 : 'bg-amber-50/90 text-amber-600 border border-amber-100/80',
             )}>
-              {selectedMode === 'flashcards' || selectedMode === 'matching' ? (
+              {selectedMode === 'flashcards' || selectedMode === 'matching' || selectedMode === 'word-bank' ? (
                 <Sparkles className="w-6 h-6" />
               ) : (
                 <Trophy className="w-6 h-6" />
@@ -1027,7 +1221,9 @@ export function LearnPage() {
                   ? 'Lückentext-Session abgeschlossen!'
                   : selectedMode === 'matching'
                     ? 'Zuordnungs-Session abgeschlossen!'
-                    : 'Quiz abgeschlossen!'}
+                    : selectedMode === 'word-bank'
+                      ? 'Wortbank-Session abgeschlossen!'
+                      : 'Quiz abgeschlossen!'}
             </h2>
             <p className="text-sm text-slate-500">
               {selectedMode === 'flashcards'
@@ -1036,7 +1232,9 @@ export function LearnPage() {
                   ? `Du hast ${fillBlankSummary?.correctCount ?? 0} von ${fillBlankSummary?.totalTasks ?? 0} Lücken richtig ergänzt.`
                   : selectedMode === 'matching'
                     ? `Du hast alle ${matchingSummary?.totalPairs ?? 0} Paare in ${completedTasks.length} Aufgaben erfolgreich zugeordnet.`
-                    : `Du hast ${quizSummary?.correctCount ?? 0} von ${quizSummary?.totalQuestions ?? 0} Fragen richtig beantwortet.`}
+                    : selectedMode === 'word-bank'
+                      ? `Du hast ${wordBankSummary?.correctBlanks ?? 0} von ${wordBankSummary?.totalBlanks ?? 0} Lücken in ${completedTasks.length} Aufgaben richtig ausgefüllt.`
+                      : `Du hast ${quizSummary?.correctCount ?? 0} von ${quizSummary?.totalQuestions ?? 0} Fragen richtig beantwortet.`}
             </p>
           </div>
 
@@ -1069,7 +1267,7 @@ export function LearnPage() {
                         </span>
                       </div>
                     ))
-                : (fillBlankSummary || quizSummary)?.byTopic.map((item) => (
+                : (wordBankSummary || fillBlankSummary || quizSummary)?.byTopic.map((item) => (
                     <div
                       key={item.topicId}
                       className="flex items-center justify-between p-3 rounded-lg bg-white border border-slate-200/70 text-sm gap-2"
@@ -1124,7 +1322,7 @@ export function LearnPage() {
                 <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
                   {selectedMode === 'flashcards'
                     ? 'Karte'
-                    : selectedMode === 'matching' || selectedMode === 'fill-in-the-blank'
+                    : selectedMode === 'matching' || selectedMode === 'fill-in-the-blank' || selectedMode === 'word-bank'
                       ? 'Aufgabe'
                       : 'Frage'}{' '}
                   {currentQuestionNumber} von {SESSION_QUESTION_LIMIT}
@@ -1685,10 +1883,258 @@ export function LearnPage() {
             );
           })()}
 
+          {/* Wortbank (Word-Bank) Task View */}
+          {selectedMode === 'word-bank' && currentTask.mode === 'word-bank' && (() => {
+            const totalBlanks = currentTask.blanks.length;
+            const filledCount = Object.keys(wordBankPlacements).length;
+            const isAllFilled = filledCount === totalBlanks;
+
+            // Placed words set to easily determine which bank chips are in use
+            const placedWords = new Set(Object.values(wordBankPlacements));
+
+            // Tokenize text into segments and blank placeholders
+            const tokens = currentTask.textWithBlanks.split(/(\{\{blank-\d+\}\})/g);
+
+            return (
+              <div className="w-full max-w-3xl mx-auto bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-7 shadow-xs space-y-6">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                  <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                    Wortbank · {filledCount} von {totalBlanks} Lücken gefüllt
+                  </span>
+                  <span className="text-xs text-slate-400">
+                    {isAnswerRevealed
+                      ? '✓ Alle Lücken richtig ausgefüllt'
+                      : wordBankChecked
+                        ? 'Korrigiere noch fehlerhafte Lücken'
+                        : isAllFilled
+                          ? 'Bereit zum Prüfen'
+                          : 'Wörter ziehen oder antippen'}
+                  </span>
+                </div>
+
+                {/* Instruction */}
+                <div>
+                  <h2 className="text-base sm:text-lg font-semibold text-slate-900 leading-snug">
+                    {currentTask.instruction}
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Ziehe Wörter aus der Wortbank in die passenden Lücken oder tippe zuerst auf ein Wort und dann auf die gewünschte Lücke.
+                  </p>
+                </div>
+
+                {/* Text with Interactive Blanks */}
+                <div className="p-4 sm:p-6 bg-slate-50/70 border border-slate-200/80 rounded-xl leading-loose sm:leading-loose text-sm sm:text-base text-slate-800 break-words">
+                  {tokens.map((part, partIdx) => {
+                    const match = part.match(/^\{\{(blank-\d+)\}\}$/);
+                    if (!match) {
+                      return <span key={`text-${partIdx}`}>{part}</span>;
+                    }
+
+                    const blankId = match[1];
+                    const blank = currentTask.blanks.find((b) => b.id === blankId);
+                    const placedWord = wordBankPlacements[blankId];
+                    const isCorrect =
+                      wordBankChecked && placedWord && blank
+                        ? checkWordBankAnswer(placedWord, blank.answer)
+                        : null;
+
+                    return (
+                      <span
+                        key={`blank-slot-${blankId}`}
+                        className="inline-block mx-1 my-1 align-middle"
+                      >
+                        {placedWord ? (
+                          <span
+                            className={cn(
+                              'inline-flex items-center gap-1.5 px-3 py-1 rounded-lg border text-sm font-semibold transition-[background-color,border-color,box-shadow,color,transform] duration-150 select-none shadow-2xs',
+                              !wordBankChecked &&
+                                'bg-white border-blue-400 text-blue-900 ring-1 ring-blue-400/50',
+                              wordBankChecked &&
+                                isCorrect &&
+                                'bg-emerald-50 border-emerald-500 text-emerald-900 ring-1 ring-emerald-500/50',
+                              wordBankChecked &&
+                                !isCorrect &&
+                                'bg-red-50 border-red-500 text-red-900 ring-1 ring-red-500/50',
+                            )}
+                          >
+                            <span>{placedWord}</span>
+                            {wordBankChecked && isCorrect && (
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                            )}
+                            {wordBankChecked && !isCorrect && (
+                              <XCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                            )}
+                            {!isAnswerRevealed && (
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveWordFromBlank(blankId)}
+                                className="p-0.5 rounded-full hover:bg-slate-200/80 text-slate-400 hover:text-slate-700 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-500"
+                                aria-label={`Entferne ${placedWord} aus Lücke`}
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            )}
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handlePlaceWordInBlank(blankId)}
+                            onDragOver={(e) => {
+                              e.preventDefault();
+                              e.dataTransfer.dropEffect = 'move';
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault();
+                              const droppedWord = e.dataTransfer.getData('text/plain');
+                              if (droppedWord) {
+                                handlePlaceWordInBlank(blankId, droppedWord);
+                              }
+                            }}
+                            disabled={isAnswerRevealed}
+                            aria-label={`Lücke ${blankId.replace('blank-', '')}${selectedWordBankToken ? `: Klicke um ${selectedWordBankToken} einzusetzen` : ''}`}
+                            className={cn(
+                              'inline-flex items-center justify-center min-w-[90px] sm:min-w-[110px] h-8 sm:h-9 px-3 border-2 border-dashed rounded-lg text-xs font-medium transition-[background-color,border-color,box-shadow,color,transform] duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 select-none active:scale-[0.98]',
+                              selectedWordBankToken
+                                ? 'border-blue-500 bg-blue-50/80 text-blue-700 animate-pulse'
+                                : 'border-slate-300 bg-white/80 hover:bg-slate-100/80 hover:border-slate-400 text-slate-400',
+                            )}
+                          >
+                            {selectedWordBankToken ? 'Hier einsetzen' : `[ Lücke ${blankId.replace('blank-', '')} ]`}
+                          </button>
+                        )}
+                      </span>
+                    );
+                  })}
+                </div>
+
+                {/* Word Bank Area */}
+                <div className="space-y-2.5 pt-2">
+                  <div className="flex items-center justify-between px-1">
+                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                      Verfügbare Wörter ({currentTask.words.length - placedWords.size} übrig)
+                    </span>
+                    {selectedWordBankToken && (
+                      <span className="text-xs text-blue-600 font-medium">
+                        Ausgewählt: „{selectedWordBankToken}“ (tippe auf eine freie Lücke)
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-2 p-3 bg-slate-100/60 border border-slate-200/80 rounded-xl min-h-[56px] items-center">
+                    {currentTask.words.map((word) => {
+                      const isPlaced = placedWords.has(word);
+                      const isSelected = selectedWordBankToken === word;
+
+                      return (
+                        <button
+                          key={`bank-word-${word}`}
+                          type="button"
+                          draggable={!isPlaced && !isAnswerRevealed}
+                          onDragStart={(e) => {
+                            if (isPlaced || isAnswerRevealed) return;
+                            e.dataTransfer.setData('text/plain', word);
+                            e.dataTransfer.effectAllowed = 'move';
+                          }}
+                          disabled={isPlaced || isAnswerRevealed}
+                          onClick={() => handleSelectWordBankToken(word)}
+                          aria-pressed={isSelected}
+                          className={cn(
+                            'px-3.5 py-2 rounded-xl text-xs sm:text-sm font-medium border transition-[background-color,border-color,box-shadow,color,transform] duration-150 select-none shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
+                            isPlaced &&
+                              'opacity-35 bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed shadow-none',
+                            !isPlaced &&
+                              isSelected &&
+                              'border-blue-600 bg-blue-600 text-white cursor-pointer ring-2 ring-blue-500/40 shadow-xs scale-105',
+                            !isPlaced &&
+                              !isSelected &&
+                              'border-slate-200/90 bg-white text-slate-800 hover:border-slate-300 hover:bg-slate-50 cursor-grab active:cursor-grabbing active:scale-95',
+                          )}
+                        >
+                          {word}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Actions & Verification */}
+                {!isAnswerRevealed ? (
+                  <div className="pt-2 flex items-center justify-between border-t border-slate-100">
+                    <div className="text-xs text-slate-500">
+                      {!isAllFilled
+                        ? `Fülle alle ${totalBlanks} Lücken aus, um zu prüfen.`
+                        : wordBankChecked
+                          ? 'Einige Lücken sind noch fehlerhaft. Tausche Wörter aus und prüfe erneut.'
+                          : 'Alle Lücken sind belegt.'}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleCheckWordBank}
+                      disabled={!isAllFilled}
+                      className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl shadow-xs transition-[background-color,transform] duration-150 cursor-pointer active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+                    >
+                      <span>Prüfen</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  /* Completion & Next Task View */
+                  <div className="pt-4 border-t border-slate-100 space-y-4">
+                    <div className="p-3.5 sm:p-4 rounded-xl bg-emerald-50/80 border border-emerald-200/90 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5">
+                        <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                        <div>
+                          <p className="text-sm font-semibold text-emerald-950">
+                            Alles richtig ausgefüllt!
+                          </p>
+                          <p className="text-xs text-emerald-800 mt-0.5">
+                            Alle {totalBlanks} Lücken wurden korrekt mit den Begriffen belegt.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Evidence Quotes list for learning reinforcement */}
+                    <div className="space-y-2">
+                      <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                        Belege aus den Quellen:
+                      </div>
+                      <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                        {currentTask.blanks.map((b) => (
+                          <div
+                            key={`ev-${b.id}`}
+                            className="p-2.5 rounded-lg bg-slate-50 border border-slate-200/70 text-xs text-slate-700 leading-relaxed"
+                          >
+                            <span className="font-semibold text-slate-900">{b.answer}:</span>{' '}
+                            „{b.evidence}“
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end pt-2">
+                      <button
+                        type="button"
+                        onClick={handleNextTask}
+                        className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-sm font-medium rounded-xl shadow-xs transition-[background-color,transform] duration-150 cursor-pointer active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+                      >
+                        <span>
+                          {completedTasks.length >= SESSION_QUESTION_LIMIT
+                            ? 'Ergebnis ansehen'
+                            : 'Nächste Aufgabe'}
+                        </span>
+                        <ArrowRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
           {/* Sources Grounding Block (Mandatory) */}
           <div className={cn(
             'bg-white border border-slate-200/90 rounded-xl p-4 sm:p-5 shadow-2xs space-y-3',
-            (selectedMode === 'flashcards' || selectedMode === 'fill-in-the-blank' || selectedMode === 'matching') && 'max-w-3xl mx-auto w-full',
+            (selectedMode === 'flashcards' || selectedMode === 'fill-in-the-blank' || selectedMode === 'matching' || selectedMode === 'word-bank') && 'max-w-3xl mx-auto w-full',
           )}>
             <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
               <Layers className="w-3.5 h-3.5 text-slate-400" />

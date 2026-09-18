@@ -11,6 +11,9 @@ import {
   generateFillInBlankTask,
   validateMatchingTask,
   generateMatchingTask,
+  checkWordBankAnswer,
+  validateWordBankTask,
+  generateWordBankTask,
 } from './learnGenerator';
 import type { GroundedKnowledgeContext, GroundedSource } from './learningTypes';
 
@@ -947,4 +950,244 @@ describe('learnGenerator', () => {
       expect(calledBody.messages[1].content).toContain('SCHWERPUNKT-THEMA FÜR DIESE ZUORDNUNG: Cloud-Management');
     });
   });
+
+  describe('checkWordBankAnswer', () => {
+    it('matches identical strings with case and whitespace insensitivity', () => {
+      expect(checkWordBankAnswer('Filtert', 'filtert')).toBe(true);
+      expect(checkWordBankAnswer('  filtert  ', 'filtert')).toBe(true);
+      expect(checkWordBankAnswer('Verschlüsselung', 'verschlüsselung')).toBe(true);
+    });
+
+    it('rejects differing strings or empty inputs', () => {
+      expect(checkWordBankAnswer('filtert', 'blockieren')).toBe(false);
+      expect(checkWordBankAnswer('', 'filtert')).toBe(false);
+      expect(checkWordBankAnswer('filtert', '')).toBe(false);
+    });
+  });
+
+  describe('validateWordBankTask (Hallucination Prevention)', () => {
+    const allowedIds = new Set(['doc-1', 'web-1']);
+
+    const validWordBankRaw = {
+      instruction: 'Setze die passenden Begriffe in die Lücken ein.',
+      textWithBlanks: 'Eine Firewall {{blank-1}} den Datenverkehr und kann Verbindungen {{blank-2}}. Zudem sorgt Verschlüsselung für {{blank-3}}.',
+      blanks: [
+        {
+          id: 'blank-1',
+          answer: 'filtert',
+          evidence: 'Eine Firewall filtert den Datenverkehr.',
+          sourceIds: ['doc-1'],
+        },
+        {
+          id: 'blank-2',
+          answer: 'blockieren',
+          evidence: 'Firewalls können Verbindungen blockieren.',
+          sourceIds: ['doc-1'],
+        },
+        {
+          id: 'blank-3',
+          answer: 'Vertraulichkeit',
+          evidence: 'Verschlüsselung garantiert Vertraulichkeit.',
+          sourceIds: ['web-1'],
+        },
+      ],
+      words: ['blockieren', 'filtert', 'Authentifizierung', 'Vertraulichkeit', 'Routing'],
+    };
+
+    it('accepts valid, fully source-grounded word bank task', () => {
+      const task = validateWordBankTask(validWordBankRaw, allowedIds, 'top-1');
+      expect(task).not.toBeNull();
+      expect(task?.mode).toBe('word-bank');
+      expect(task?.blanks.length).toBe(3);
+      expect(task?.words.length).toBe(5);
+      expect(task?.sourceIds).toEqual(expect.arrayContaining(['doc-1', 'web-1']));
+    });
+
+    it('rejects task with fewer than 3 blanks', () => {
+      const task = validateWordBankTask(
+        {
+          ...validWordBankRaw,
+          blanks: validWordBankRaw.blanks.slice(0, 2),
+        },
+        allowedIds,
+        'top-1',
+      );
+      expect(task).toBeNull();
+    });
+
+    it('rejects task with more than 5 blanks', () => {
+      const task = validateWordBankTask(
+        {
+          ...validWordBankRaw,
+          blanks: [
+            ...validWordBankRaw.blanks,
+            { id: 'blank-4', answer: 'Authentifizierung', evidence: 'ev4', sourceIds: ['doc-1'] },
+            { id: 'blank-5', answer: 'Routing', evidence: 'ev5', sourceIds: ['doc-1'] },
+            { id: 'blank-6', answer: 'Schutz', evidence: 'ev6', sourceIds: ['doc-1'] },
+          ],
+        },
+        allowedIds,
+        'top-1',
+      );
+      expect(task).toBeNull();
+    });
+
+    it('rejects task if a blank placeholder is missing from text', () => {
+      const task = validateWordBankTask(
+        {
+          ...validWordBankRaw,
+          textWithBlanks: 'Hier fehlt der Platzhalter für blank-3. {{blank-1}} und {{blank-2}}.',
+        },
+        allowedIds,
+        'top-1',
+      );
+      expect(task).toBeNull();
+    });
+
+    it('rejects task if a blank answer is NOT in the word bank', () => {
+      const task = validateWordBankTask(
+        {
+          ...validWordBankRaw,
+          words: ['blockieren', 'filtert', 'Authentifizierung', 'Routing'], // 'Vertraulichkeit' missing
+        },
+        allowedIds,
+        'top-1',
+      );
+      expect(task).toBeNull();
+    });
+
+    it('rejects task with hallucinated source IDs', () => {
+      const task = validateWordBankTask(
+        {
+          ...validWordBankRaw,
+          blanks: [
+            validWordBankRaw.blanks[0],
+            validWordBankRaw.blanks[1],
+            {
+              ...validWordBankRaw.blanks[2],
+              sourceIds: ['hallucinated-doc-99'],
+            },
+          ],
+        },
+        allowedIds,
+        'top-1',
+      );
+      expect(task).toBeNull();
+    });
+
+    it('rejects task with duplicate blank IDs', () => {
+      const task = validateWordBankTask(
+        {
+          ...validWordBankRaw,
+          blanks: [
+            validWordBankRaw.blanks[0],
+            validWordBankRaw.blanks[1],
+            {
+              ...validWordBankRaw.blanks[2],
+              id: 'blank-1', // duplicate
+            },
+          ],
+        },
+        allowedIds,
+        'top-1',
+      );
+      expect(task).toBeNull();
+    });
+
+    it('rejects task with duplicate words in word bank', () => {
+      const task = validateWordBankTask(
+        {
+          ...validWordBankRaw,
+          words: ['filtert', 'filtert', 'blockieren', 'Vertraulichkeit', 'Routing'],
+        },
+        allowedIds,
+        'top-1',
+      );
+      expect(task).toBeNull();
+    });
+
+    it('rejects task if text contains raw HTML tags', () => {
+      const task = validateWordBankTask(
+        {
+          ...validWordBankRaw,
+          textWithBlanks: '<script>alert(1)</script> Eine Firewall {{blank-1}}...',
+        },
+        allowedIds,
+        'top-1',
+      );
+      expect(task).toBeNull();
+    });
+  });
+
+  describe('generateWordBankTask', () => {
+    const context: GroundedKnowledgeContext = {
+      subjectId: 'sub-1',
+      subjectName: 'Informatik',
+      topicIds: ['top-1'],
+      topicNames: ['Netzwerke'],
+      sources: sampleSources,
+    };
+
+    it('calls DeepSeek API and validates response into WordBankTask', async () => {
+      const mockResponse = {
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                topicId: 'top-1',
+                instruction: 'Setze die Begriffe ein.',
+                textWithBlanks: 'Eine Firewall {{blank-1}} Datenströme und kann Pakete {{blank-2}}. NIST beschreibt essentielle {{blank-3}}.',
+                blanks: [
+                  {
+                    id: 'blank-1',
+                    answer: 'filtert',
+                    evidence: 'IaaS bietet grundlegende Rechen- und Speicherressourcen.',
+                    sourceIds: ['doc-1'],
+                  },
+                  {
+                    id: 'blank-2',
+                    answer: 'blockieren',
+                    evidence: 'IaaS bietet grundlegende Rechen- und Speicherressourcen.',
+                    sourceIds: ['doc-1'],
+                  },
+                  {
+                    id: 'blank-3',
+                    answer: 'Charakteristiken',
+                    evidence: 'NIST definiert 5 essentielle Charakteristiken von Cloud Computing.',
+                    sourceIds: ['web-1'],
+                  },
+                ],
+                words: ['blockieren', 'filtert', 'Charakteristiken', 'Speicherressourcen', 'Routing'],
+              }),
+            },
+          },
+        ],
+      };
+
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => mockResponse,
+      });
+
+      const task = await generateWordBankTask(context, {
+        apiKey: 'valid-api-key',
+        targetTopicId: 'top-1',
+        targetTopicName: 'Netzwerke',
+        difficulty: 'mittel',
+        fetchFn: mockFetch as any,
+      });
+
+      expect(task).toBeDefined();
+      expect(task.mode).toBe('word-bank');
+      expect(task.blanks.length).toBe(3);
+      expect(task.words.length).toBe(5);
+      expect(task.sourceIds).toContain('doc-1');
+      expect(task.sourceIds).toContain('web-1');
+
+      const calledBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(calledBody.messages[0].content).toContain('Wortbank / Lückentext mit Wörtern');
+      expect(calledBody.messages[1].content).toContain('SCHWERPUNKT-THEMA FÜR DIESE WORTBANK: Netzwerke');
+    });
+  });
 });
+

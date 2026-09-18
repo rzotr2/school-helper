@@ -8,6 +8,8 @@ import type {
   MatchingPair,
   MatchingTask,
   QuizTask,
+  WordBankBlank,
+  WordBankTask,
 } from './learningTypes';
 
 const DEEPSEEK_ENDPOINT =
@@ -453,6 +455,213 @@ export function validateMatchingTask(
     sourceIds: Array.from(taskSourceIds),
   };
 }
+
+/**
+ * Deterministically checks the user's placed word against the expected answer for a blank:
+ * - Trims whitespace
+ * - Normalizes multiple spaces
+ * - Compares case-insensitively using German locale
+ */
+export function checkWordBankAnswer(userWord: string, expectedAnswer: string): boolean {
+  if (!userWord || !expectedAnswer) return false;
+  const normalize = (s: string) =>
+    s
+      .trim()
+      .toLocaleLowerCase('de-DE')
+      .replace(/\s+/g, ' ');
+
+  const normUser = normalize(userWord);
+  const normExpected = normalize(expectedAnswer);
+
+  return normUser.length > 0 && normUser === normExpected;
+}
+
+/**
+ * Strictly validates raw model output for Wortbank / Lückentext mit Wörtern (Word-Bank).
+ *
+ * Strict safety rules:
+ * 1. AI is not a knowledge source: 0% unsupported claims.
+ * 2. `textWithBlanks` must be a non-empty string and must not contain raw HTML tags.
+ * 3. `blanks` must be an array of 3 to 5 valid WordBankBlank objects.
+ * 4. Each blank must have a unique, non-empty ID (e.g. "blank-1").
+ * 5. The placeholder `{{<id>}}` must exist in `textWithBlanks` for every blank.
+ * 6. Each blank must have non-empty `answer` and `evidence`.
+ * 7. Each blank's `sourceIds` must be non-empty and strictly exist in `allowedSourceIds`.
+ * 8. `words` (word bank) must contain 4 to 8 non-empty, unique strings.
+ * 9. Every blank's answer MUST be contained in `words`.
+ * 10. `topicId` must belong to the allowed topic set (if provided).
+ */
+export function validateWordBankTask(
+  raw: unknown,
+  allowedSourceIds: Set<string>,
+  fallbackTopicId: string,
+  allowedTopicIds?: Set<string>,
+  difficulty: LearningDifficulty = 'mittel',
+): WordBankTask | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+
+  const data = raw as Record<string, unknown>;
+
+  const instruction =
+    typeof data.instruction === 'string' && data.instruction.trim()
+      ? data.instruction.trim()
+      : 'Setze die passenden Begriffe aus der Wortbank in die Lücken ein.';
+
+  const textWithBlanks =
+    typeof data.textWithBlanks === 'string' ? data.textWithBlanks.trim() : '';
+
+  if (!textWithBlanks) {
+    return null;
+  }
+
+  // Reject raw HTML tags
+  if (/<[a-z][\s\S]*>/i.test(textWithBlanks)) {
+    return null;
+  }
+
+  if (!Array.isArray(data.blanks)) {
+    return null;
+  }
+
+  // Enforce 3 to 5 blanks per task
+  if (data.blanks.length < 3 || data.blanks.length > 5) {
+    return null;
+  }
+
+  const rawTopicId =
+    typeof data.topicId === 'string' && data.topicId.trim()
+      ? data.topicId.trim()
+      : fallbackTopicId;
+
+  // Enforce topic boundary
+  if (allowedTopicIds && allowedTopicIds.size > 0 && !allowedTopicIds.has(rawTopicId)) {
+    return null;
+  }
+
+  const validatedBlanks: WordBankBlank[] = [];
+  const seenBlankIds = new Set<string>();
+  const blankAnswers = new Set<string>();
+  const taskSourceIds = new Set<string>();
+
+  for (let idx = 0; idx < data.blanks.length; idx++) {
+    const rawBlank = data.blanks[idx];
+    if (typeof rawBlank !== 'object' || rawBlank === null) {
+      return null;
+    }
+
+    const bData = rawBlank as Record<string, unknown>;
+    const blankId =
+      typeof bData.id === 'string' && bData.id.trim()
+        ? bData.id.trim()
+        : `blank-${idx + 1}`;
+
+    if (seenBlankIds.has(blankId)) {
+      return null; // Duplicate blank ID
+    }
+    seenBlankIds.add(blankId);
+
+    // Verify placeholder {{blankId}} exists in the text
+    const placeholder = `{{${blankId}}}`;
+    if (!textWithBlanks.includes(placeholder)) {
+      return null;
+    }
+
+    const answer = typeof bData.answer === 'string' ? bData.answer.trim() : '';
+    const evidence = typeof bData.evidence === 'string' ? bData.evidence.trim() : '';
+
+    if (!answer || !evidence) {
+      return null;
+    }
+
+    // Reject HTML in answers
+    if (/<[a-z][\s\S]*>/i.test(answer)) {
+      return null;
+    }
+
+    // Validate blank source references
+    if (!Array.isArray(bData.sourceIds) || bData.sourceIds.length === 0) {
+      return null;
+    }
+
+    const validBlankSourceIds: string[] = [];
+    for (const sid of bData.sourceIds) {
+      if (typeof sid === 'string' && allowedSourceIds.has(sid.trim())) {
+        const cleanSid = sid.trim();
+        validBlankSourceIds.push(cleanSid);
+        taskSourceIds.add(cleanSid);
+      } else {
+        // Unknown / hallucinated source ID
+        return null;
+      }
+    }
+
+    if (validBlankSourceIds.length === 0) {
+      return null;
+    }
+
+    blankAnswers.add(answer.toLocaleLowerCase('de-DE'));
+
+    validatedBlanks.push({
+      id: blankId,
+      answer,
+      evidence,
+      sourceIds: validBlankSourceIds,
+    });
+  }
+
+  // Validate words (word bank)
+  if (!Array.isArray(data.words)) {
+    return null;
+  }
+
+  // Word bank must contain 4 to 8 words
+  if (data.words.length < 4 || data.words.length > 8) {
+    return null;
+  }
+
+  const validatedWords: string[] = [];
+  const seenWordNorms = new Set<string>();
+
+  for (const rawWord of data.words) {
+    if (typeof rawWord !== 'string') {
+      return null;
+    }
+    const word = rawWord.trim();
+    if (!word) {
+      return null;
+    }
+    const norm = word.toLocaleLowerCase('de-DE');
+    if (seenWordNorms.has(norm)) {
+      return null; // No duplicates in word bank
+    }
+    seenWordNorms.add(norm);
+    validatedWords.push(word);
+  }
+
+  // Every blank answer MUST be present in the word bank
+  for (const answerNorm of blankAnswers) {
+    if (!seenWordNorms.has(answerNorm)) {
+      return null;
+    }
+  }
+
+  if (taskSourceIds.size === 0) {
+    return null;
+  }
+
+  return {
+    id: typeof data.id === 'string' && data.id ? data.id : `wordbank-${Date.now()}`,
+    mode: 'word-bank',
+    topicId: rawTopicId,
+    difficulty,
+    instruction,
+    textWithBlanks,
+    blanks: validatedBlanks,
+    words: validatedWords,
+    sourceIds: Array.from(taskSourceIds),
+  };
+}
+
 
 export interface GenerateQuizTaskOptions {
   apiKey?: string;
@@ -1087,5 +1296,184 @@ ${formattedSources}`;
 
   return task;
 }
+
+export interface GenerateWordBankTaskOptions {
+  apiKey?: string;
+  targetTopicId?: string;
+  targetTopicName?: string;
+  difficulty?: LearningDifficulty;
+  fetchFn?: typeof fetch;
+}
+
+/**
+ * Calls DeepSeek to transform the grounded knowledge context into one strictly verified Wortbank (word-bank) task.
+ * Creates a text with 3-5 blanks (e.g. {{blank-1}}, {{blank-2}}) and a word bank of 4-8 words (including answers and grounded distractors).
+ */
+export async function generateWordBankTask(
+  context: GroundedKnowledgeContext,
+  options: GenerateWordBankTaskOptions = {},
+): Promise<WordBankTask> {
+  const {
+    apiKey,
+    targetTopicId,
+    targetTopicName,
+    difficulty = 'mittel',
+    fetchFn = fetch,
+  } = options;
+
+  const key = apiKey || getDeepSeekApiKey();
+  if (!key) {
+    throw new Error(
+      'DeepSeek API Key fehlt. Bitte trage VITE_DEEPSEEK_API_KEY in deiner .env Datei ein.',
+    );
+  }
+
+  if (!context.sources || context.sources.length === 0) {
+    throw new Error(
+      'Nicht genügend Quellenmaterial vorhanden, um eine überprüfte Lernaufgabe zu erstellen.',
+    );
+  }
+
+  const hasDocumentSources = context.sources.some((s) => s.type === 'document');
+  if (!hasDocumentSources) {
+    throw new Error(
+      'Die Erstellung von Lernaufgaben erfordert mindestens ein eigenes Dokument in den ausgewählten Themen.',
+    );
+  }
+
+  const allowedSourceIds = new Set(context.sources.map((s) => s.id));
+  const allowedTopicIds = new Set(context.topicIds);
+  const formattedSources = formatSourcesForPrompt(context.sources);
+
+  const activeTopicId = targetTopicId || context.topicIds[0] || '';
+  const activeTopicName =
+    targetTopicName ||
+    context.topicNames[context.topicIds.indexOf(activeTopicId)] ||
+    context.topicNames[0] ||
+    '';
+
+  const difficultyInstructions = {
+    leicht:
+      'Erstelle einen leicht verständlichen Text mit 3 Lücken für zentrale Grundbegriffe. Die Wortbank soll 4 bis 5 Wörter umfassen (3 Antworten + 1-2 einfache, plausible Distraktoren aus den Quellen).',
+    mittel:
+      'Erstelle einen zusammenhängenden Erklärungstext mit 3 bis 4 Lücken für wichtige Fachbegriffe, Prozesse oder Komponenten. Die Wortbank soll 5 bis 6 Wörter umfassen (3-4 Antworten + 2 thematisch passende Distraktoren aus den Quellen).',
+    schwer:
+      'Erstelle einen anspruchsvollen Fachtext mit 4 Lücken für spezifische Mechanismen, Kriterien oder Fachtermini. Die Wortbank soll 6 bis 7 Wörter umfassen (4 Antworten + 2-3 trennscharfe Distraktoren aus den Quellen).',
+  }[difficulty];
+
+  const systemPrompt = `You are an educational task generator for School Helper.
+Your sole job is to create a Wortbank / Lückentext mit Wörtern (Word Bank) study task for a student strictly from the provided source material.
+
+CRITICAL ARCHITECTURAL RULES:
+1. AI IS NOT A KNOWLEDGE SOURCE. You have ZERO right to supply outside facts, definitions, or technical details not found in the sources.
+2. 0% unsupported claims: Every single factual claim in the text, answers, distractors, and evidence must be directly and provably derived from the provided sources.
+3. Every blank must be marked with a unique machine-readable placeholder {{blank-1}}, {{blank-2}}, {{blank-3}}, etc. in "textWithBlanks".
+4. "blanks": An array of 3 to 5 blank objects.
+   - "id": "blank-1", "blank-2", etc. Matching the placeholder in "textWithBlanks".
+   - "answer": The exact word/term that fits this blank. Must be a meaningful technical term or concept, NEVER trivial articles (der/die/das/ein) or filler words.
+   - "evidence": Exact quote from the source proving this fact and answer.
+   - "sourceIds": Valid source IDs (e.g. ["doc-1"]) proving this statement.
+5. "words": The word bank array of 4 to 8 unique words/terms in shuffled order.
+   - MUST contain all answers of the blanks.
+   - Plus 1 to 3 plausible distractors that are ALSO derived from the provided source context (no random words!).
+6. "instruction": A short German instruction (e.g. "Setze die passenden Begriffe aus der Wortbank in die Lücken ein.").
+7. SCHWIERIGKEITSGRAD: ${difficulty.toUpperCase()}.
+${difficultyInstructions}
+
+You must respond ONLY with a valid JSON object strictly matching this schema:
+{
+  "topicId": "${activeTopicId}",
+  "instruction": "Setze die passenden Begriffe in die Lücken ein.",
+  "textWithBlanks": "Eine Firewall {{blank-1}} den Datenverkehr und kann verdächtige Verbindungen {{blank-2}}. Zudem sorgt die Verschlüsselung für {{blank-3}} bei der Übertragung.",
+  "blanks": [
+    {
+      "id": "blank-1",
+      "answer": "filtert",
+      "evidence": "Eine Firewall filtert eingehende und ausgehende Datenströme.",
+      "sourceIds": ["doc-1"]
+    },
+    {
+      "id": "blank-2",
+      "answer": "blockieren",
+      "evidence": "Unerwünschte Pakete werden von der Firewall zuverlässig blockiert.",
+      "sourceIds": ["doc-1"]
+    },
+    {
+      "id": "blank-3",
+      "answer": "Vertraulichkeit",
+      "evidence": "Kryptografische Verfahren garantieren Vertraulichkeit im Netz.",
+      "sourceIds": ["doc-1"]
+    }
+  ],
+  "words": [
+    "blockieren",
+    "filtert",
+    "Authentifizierung",
+    "Vertraulichkeit",
+    "Routing"
+  ]
+}`;
+
+  const userPrompt = `FACH: ${context.subjectName}
+SCHWERPUNKT-THEMA FÜR DIESE WORTBANK: ${activeTopicName || context.topicNames.join(', ')}
+SCHWIERIGKEIT: ${difficulty}
+
+VERFÜGBARE QUELLEN:
+${formattedSources}`;
+
+  const response = await fetchFn(DEEPSEEK_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${key}`,
+    },
+    body: JSON.stringify({
+      model: 'deepseek-chat',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.1,
+      stream: false,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => '');
+    throw new Error(
+      `DeepSeek API Fehler (${response.status}): ${errorText || response.statusText}`,
+    );
+  }
+
+  const data = await response.json();
+  const rawContent = data.choices?.[0]?.message?.content;
+  if (!rawContent) {
+    throw new Error('Keine Antwort von DeepSeek erhalten');
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawContent);
+  } catch {
+    throw new Error('Ungültiges JSON-Format von DeepSeek empfangen');
+  }
+
+  const task = validateWordBankTask(
+    parsed,
+    allowedSourceIds,
+    activeTopicId,
+    allowedTopicIds,
+    difficulty,
+  );
+  if (!task) {
+    throw new Error(
+      'Die erstellte Wortbank-Aufgabe konnte nicht anhand der verifizierten Quellen validiert werden (Halluzinations-Schutz).',
+    );
+  }
+
+  return task;
+}
+
 
 
