@@ -5,6 +5,8 @@ import type {
   GroundedKnowledgeContext,
   GroundedSource,
   LearningDifficulty,
+  MatchingPair,
+  MatchingTask,
   QuizTask,
 } from './learningTypes';
 
@@ -309,6 +311,146 @@ export function validateFillInBlankTask(
     answer,
     evidence,
     sourceIds: validSourceIds,
+  };
+}
+
+/**
+ * Strictly validates raw model output for Matching (Zuordnen).
+ *
+ * Strict safety rules:
+ * 1. AI is not a knowledge source: 0% unsupported claims.
+ * 2. `instruction` must be a non-empty string.
+ * 3. `pairs` must be an array of 3 to 6 valid MatchingPair objects.
+ * 4. Each pair must have a unique, non-empty ID.
+ * 5. Each pair's `left` and `right` must be non-empty, distinct strings (preventing trivial pairs like X -> X).
+ * 6. Each pair must have a non-empty `evidence` string.
+ * 7. Each pair must have non-empty `sourceIds` containing strictly existing IDs in `allowedSourceIds`.
+ * 8. All pairs must have unique `left` items and unique `right` items to prevent ambiguous mappings.
+ * 9. `topicId` must belong to the allowed topic set (if provided).
+ */
+export function validateMatchingTask(
+  raw: unknown,
+  allowedSourceIds: Set<string>,
+  fallbackTopicId: string,
+  allowedTopicIds?: Set<string>,
+  difficulty: LearningDifficulty = 'mittel',
+): MatchingTask | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+
+  const data = raw as Record<string, unknown>;
+
+  const instruction =
+    typeof data.instruction === 'string' && data.instruction.trim()
+      ? data.instruction.trim()
+      : 'Ordne die zusammengehörigen Begriffe und Beschreibungen einander zu.';
+
+  if (!Array.isArray(data.pairs)) {
+    return null;
+  }
+
+  // Enforce reasonable pair counts (3 to 6 pairs)
+  if (data.pairs.length < 3 || data.pairs.length > 6) {
+    return null;
+  }
+
+  const rawTopicId =
+    typeof data.topicId === 'string' && data.topicId.trim()
+      ? data.topicId.trim()
+      : fallbackTopicId;
+
+  // Enforce topic boundary
+  if (allowedTopicIds && allowedTopicIds.size > 0 && !allowedTopicIds.has(rawTopicId)) {
+    return null;
+  }
+
+  const validatedPairs: MatchingPair[] = [];
+  const seenPairIds = new Set<string>();
+  const seenLefts = new Set<string>();
+  const seenRights = new Set<string>();
+  const taskSourceIds = new Set<string>();
+
+  for (let idx = 0; idx < data.pairs.length; idx++) {
+    const rawPair = data.pairs[idx];
+    if (typeof rawPair !== 'object' || rawPair === null) {
+      return null;
+    }
+
+    const pairData = rawPair as Record<string, unknown>;
+
+    const pairId =
+      typeof pairData.id === 'string' && pairData.id.trim()
+        ? pairData.id.trim()
+        : `pair-${idx + 1}`;
+
+    if (seenPairIds.has(pairId)) {
+      return null; // Duplicate pair ID
+    }
+    seenPairIds.add(pairId);
+
+    const left = typeof pairData.left === 'string' ? pairData.left.trim() : '';
+    const right = typeof pairData.right === 'string' ? pairData.right.trim() : '';
+    const evidence = typeof pairData.evidence === 'string' ? pairData.evidence.trim() : '';
+
+    if (!left || !right || !evidence) {
+      return null;
+    }
+
+    // Trivial match check: left and right should not be identically worded
+    if (left.toLocaleLowerCase('de-DE') === right.toLocaleLowerCase('de-DE')) {
+      return null;
+    }
+
+    // Duplicate left or right check (prevents ambiguous matching)
+    const normLeft = left.toLocaleLowerCase('de-DE');
+    const normRight = right.toLocaleLowerCase('de-DE');
+    if (seenLefts.has(normLeft) || seenRights.has(normRight)) {
+      return null;
+    }
+    seenLefts.add(normLeft);
+    seenRights.add(normRight);
+
+    // Validate pair source references
+    if (!Array.isArray(pairData.sourceIds) || pairData.sourceIds.length === 0) {
+      return null;
+    }
+
+    const validPairSourceIds: string[] = [];
+    for (const sid of pairData.sourceIds) {
+      if (typeof sid === 'string' && allowedSourceIds.has(sid.trim())) {
+        const cleanSid = sid.trim();
+        validPairSourceIds.push(cleanSid);
+        taskSourceIds.add(cleanSid);
+      } else {
+        // Unknown / hallucinated source ID
+        return null;
+      }
+    }
+
+    if (validPairSourceIds.length === 0) {
+      return null;
+    }
+
+    validatedPairs.push({
+      id: pairId,
+      left,
+      right,
+      evidence,
+      sourceIds: validPairSourceIds,
+    });
+  }
+
+  if (validatedPairs.length < 3 || taskSourceIds.size === 0) {
+    return null;
+  }
+
+  return {
+    id: typeof data.id === 'string' && data.id ? data.id : `matching-${Date.now()}`,
+    mode: 'matching',
+    topicId: rawTopicId,
+    difficulty,
+    instruction,
+    pairs: validatedPairs,
+    sourceIds: Array.from(taskSourceIds),
   };
 }
 
@@ -767,4 +909,183 @@ ${formattedSources}`;
 
   return task;
 }
+
+export interface GenerateMatchingTaskOptions {
+  apiKey?: string;
+  targetTopicId?: string;
+  targetTopicName?: string;
+  difficulty?: LearningDifficulty;
+  fetchFn?: typeof fetch;
+}
+
+/**
+ * Calls DeepSeek to transform the grounded knowledge context into one strictly verified Matching (Zuordnen) task.
+ * Generates 4-6 matching pairs strictly supported by the grounded source material.
+ */
+export async function generateMatchingTask(
+  context: GroundedKnowledgeContext,
+  options: GenerateMatchingTaskOptions = {},
+): Promise<MatchingTask> {
+  const {
+    apiKey,
+    targetTopicId,
+    targetTopicName,
+    difficulty = 'mittel',
+    fetchFn = fetch,
+  } = options;
+
+  const key = apiKey || getDeepSeekApiKey();
+  if (!key) {
+    throw new Error(
+      'DeepSeek API Key fehlt. Bitte trage VITE_DEEPSEEK_API_KEY in deiner .env Datei ein.',
+    );
+  }
+
+  if (!context.sources || context.sources.length === 0) {
+    throw new Error(
+      'Nicht genügend Quellenmaterial vorhanden, um eine überprüfte Lernaufgabe zu erstellen.',
+    );
+  }
+
+  const hasDocumentSources = context.sources.some((s) => s.type === 'document');
+  if (!hasDocumentSources) {
+    throw new Error(
+      'Die Erstellung von Lernaufgaben erfordert mindestens ein eigenes Dokument in den ausgewählten Themen.',
+    );
+  }
+
+  const allowedSourceIds = new Set(context.sources.map((s) => s.id));
+  const allowedTopicIds = new Set(context.topicIds);
+  const formattedSources = formatSourcesForPrompt(context.sources);
+
+  const activeTopicId = targetTopicId || context.topicIds[0] || '';
+  const activeTopicName =
+    targetTopicName ||
+    context.topicNames[context.topicIds.indexOf(activeTopicId)] ||
+    context.topicNames[0] ||
+    '';
+
+  const difficultyInstructions = {
+    leicht:
+      'Erstelle 4 klare, grundlegende Paare (z.B. Begriff → einfache Definition oder Technologie → Einsatzzweck).',
+    mittel:
+      'Erstelle 4 bis 5 differenzierte Paare (z.B. Konzept → konkretes Praxisbeispiel, Ursache → Wirkung, Prozessschritt → Funktion).',
+    schwer:
+      'Erstelle 5 bis 6 anspruchsvolle Paare mit subtileren Unterscheidungsmerkmalen (z.B. Maßnahme → spezifisches Risiko, Abgrenzungen ähnlicher Konzepte).',
+  }[difficulty];
+
+  const systemPrompt = `You are an educational task generator for School Helper.
+Your sole job is to create a Matching (Zuordnen) study exercise for a student strictly from the provided source material.
+
+CRITICAL ARCHITECTURAL RULES:
+1. AI IS NOT A KNOWLEDGE SOURCE. You have ZERO right to supply outside facts, definitions, or technical details not found in the sources.
+2. 0% unsupported claims: Every single pair (left item, right item, and evidence) must be directly and provably derived from the provided sources.
+3. Generate between 4 and 6 matching pairs (target: 4-5 pairs).
+4. Each pair must represent a meaningful educational relationship (e.g. Term → Definition, Concept → Example, Cause → Effect, Technology → Purpose, Measure → Threat).
+5. Avoid trivial pairs with identical wording (e.g. "Firewall" → "Firewall"). Left and right MUST be distinct.
+6. Both "left" and "right" should be concise and easily readable on mobile screens (left: typically 1-4 words; right: concise sentence or phrase).
+7. All "left" items must be distinct from one another. All "right" items must be distinct from one another.
+8. "sourceIds": An array of valid source IDs (e.g. ["doc-1"]) that explicitly support the pair relationship. NEVER invent source IDs.
+9. "evidence": Direct quote or brief factual sentence from the source that verifies this relationship.
+10. SCHWIERIGKEITSGRAD: ${difficulty.toUpperCase()}.
+${difficultyInstructions}
+WICHTIG: Die Schwierigkeit beeinflusst nur den Anspruch der Zusammenhänge, NIEMALS dürfen dafür Fakten erfunden werden.
+
+You must respond ONLY with a valid JSON object strictly matching this schema:
+{
+  "topicId": "${activeTopicId}",
+  "instruction": "Ordne die Begriffe den passenden Beschreibungen zu.",
+  "pairs": [
+    {
+      "id": "pair-1",
+      "left": "IaaS",
+      "right": "Bereitstellung grundlegender Rechen- und Speicherressourcen",
+      "evidence": "IaaS bietet grundlegende Rechen- und Speicherressourcen.",
+      "sourceIds": ["doc-1"]
+    },
+    {
+      "id": "pair-2",
+      "left": "PaaS",
+      "right": "Plattform für Entwicklung und Bereitstellung von Anwendungen",
+      "evidence": "PaaS umfasst Plattform-Werkzeuge für Anwendungsentwicklung.",
+      "sourceIds": ["doc-1"]
+    },
+    {
+      "id": "pair-3",
+      "left": "SaaS",
+      "right": "Nutzung fertiger Softwareanwendungen über das Netz",
+      "evidence": "SaaS stellt fertige Applikationen online bereit.",
+      "sourceIds": ["doc-1"]
+    },
+    {
+      "id": "pair-4",
+      "left": "Public Cloud",
+      "right": "Infrastruktur wird öffentlich über das Internet bereitgestellt",
+      "evidence": "Public Clouds sind öffentlich zugängliche Cloud-Umgebungen.",
+      "sourceIds": ["doc-1"]
+    }
+  ]
+}`;
+
+  const userPrompt = `FACH: ${context.subjectName}
+SCHWERPUNKT-THEMA FÜR DIESE ZUORDNUNG: ${activeTopicName || context.topicNames.join(', ')}
+SCHWIERIGKEIT: ${difficulty}
+
+VERFÜGBARE QUELLEN:
+${formattedSources}`;
+
+  const response = await fetchFn(DEEPSEEK_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${key}`,
+    },
+    body: JSON.stringify({
+      model: 'deepseek-chat',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.1,
+      stream: false,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => '');
+    throw new Error(
+      `DeepSeek API Fehler (${response.status}): ${errorText || response.statusText}`,
+    );
+  }
+
+  const data = await response.json();
+  const rawContent = data.choices?.[0]?.message?.content;
+  if (!rawContent) {
+    throw new Error('Keine Antwort von DeepSeek erhalten');
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawContent);
+  } catch {
+    throw new Error('Ungültiges JSON-Format von DeepSeek empfangen');
+  }
+
+  const task = validateMatchingTask(
+    parsed,
+    allowedSourceIds,
+    activeTopicId,
+    allowedTopicIds,
+    difficulty,
+  );
+  if (!task) {
+    throw new Error(
+      'Die erstellte Zuordnungsaufgabe konnte nicht anhand der verifizierten Quellen validiert werden (Halluzinations-Schutz).',
+    );
+  }
+
+  return task;
+}
+
 

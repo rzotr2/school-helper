@@ -9,6 +9,8 @@ import {
   checkFillInBlankAnswer,
   validateFillInBlankTask,
   generateFillInBlankTask,
+  validateMatchingTask,
+  generateMatchingTask,
 } from './learnGenerator';
 import type { GroundedKnowledgeContext, GroundedSource } from './learningTypes';
 
@@ -684,6 +686,265 @@ describe('learnGenerator', () => {
       expect(calledBody.messages[0].content).toContain('Lückentext');
       expect(calledBody.messages[0].content).toContain(BLANK_MARKER);
       expect(calledBody.messages[1].content).toContain('SCHWERPUNKT-THEMA FÜR DIESEN LÜCKENTEXT: Cloud-Management');
+    });
+  });
+
+  describe('validateMatchingTask (Hallucination Prevention)', () => {
+    const allowedIds = new Set(['doc-1', 'web-1']);
+
+    it('accepts valid, fully source-grounded matching task with 4 pairs', () => {
+      const validRaw = {
+        topicId: 'top-1',
+        instruction: 'Ordne die Begriffe zu.',
+        pairs: [
+          {
+            id: 'pair-1',
+            left: 'IaaS',
+            right: 'Bereitstellung von Rechen- und Speicherressourcen',
+            evidence: 'IaaS bietet grundlegende Rechen- und Speicherressourcen.',
+            sourceIds: ['doc-1'],
+          },
+          {
+            id: 'pair-2',
+            left: 'PaaS',
+            right: 'Plattform für Entwicklung von Software',
+            evidence: 'PaaS umfasst Plattformen.',
+            sourceIds: ['doc-1'],
+          },
+          {
+            id: 'pair-3',
+            left: 'SaaS',
+            right: 'Nutzung fertiger Software über das Web',
+            evidence: 'SaaS stellt fertige Software bereit.',
+            sourceIds: ['doc-1'],
+          },
+          {
+            id: 'pair-4',
+            left: 'NIST',
+            right: 'Standardisierungsorganisation für Cloud Computing',
+            evidence: 'NIST definiert Charakteristiken.',
+            sourceIds: ['web-1'],
+          },
+        ],
+      };
+
+      const task = validateMatchingTask(validRaw, allowedIds, 'top-1');
+      expect(task).not.toBeNull();
+      expect(task?.mode).toBe('matching');
+      expect(task?.pairs.length).toBe(4);
+      expect(task?.pairs[0].left).toBe('IaaS');
+      expect(task?.pairs[0].right).toBe('Bereitstellung von Rechen- und Speicherressourcen');
+      expect(task?.sourceIds).toContain('doc-1');
+      expect(task?.sourceIds).toContain('web-1');
+    });
+
+    it('rejects task if pairs array has fewer than 3 pairs', () => {
+      const tooFewPairs = {
+        pairs: [
+          {
+            id: 'p-1',
+            left: 'IaaS',
+            right: 'Infrastruktur',
+            evidence: 'Beweis 1',
+            sourceIds: ['doc-1'],
+          },
+          {
+            id: 'p-2',
+            left: 'PaaS',
+            right: 'Plattform',
+            evidence: 'Beweis 2',
+            sourceIds: ['doc-1'],
+          },
+        ],
+      };
+
+      expect(validateMatchingTask(tooFewPairs, allowedIds, 'top-1')).toBeNull();
+    });
+
+    it('rejects task if pairs array has more than 6 pairs', () => {
+      const tooManyPairs = {
+        pairs: Array.from({ length: 7 }, (_, i) => ({
+          id: `p-${i + 1}`,
+          left: `Begriff ${i + 1}`,
+          right: `Definition ${i + 1}`,
+          evidence: `Beweis ${i + 1}`,
+          sourceIds: ['doc-1'],
+        })),
+      };
+
+      expect(validateMatchingTask(tooManyPairs, allowedIds, 'top-1')).toBeNull();
+    });
+
+    it('rejects task with duplicate pair IDs', () => {
+      const duplicateIds = {
+        pairs: [
+          { id: 'p-1', left: 'A', right: '1', evidence: 'E1', sourceIds: ['doc-1'] },
+          { id: 'p-1', left: 'B', right: '2', evidence: 'E2', sourceIds: ['doc-1'] },
+          { id: 'p-3', left: 'C', right: '3', evidence: 'E3', sourceIds: ['doc-1'] },
+        ],
+      };
+
+      expect(validateMatchingTask(duplicateIds, allowedIds, 'top-1')).toBeNull();
+    });
+
+    it('rejects task with empty left or right values', () => {
+      const emptyLeft = {
+        pairs: [
+          { id: 'p-1', left: '', right: '1', evidence: 'E1', sourceIds: ['doc-1'] },
+          { id: 'p-2', left: 'B', right: '2', evidence: 'E2', sourceIds: ['doc-1'] },
+          { id: 'p-3', left: 'C', right: '3', evidence: 'E3', sourceIds: ['doc-1'] },
+        ],
+      };
+      expect(validateMatchingTask(emptyLeft, allowedIds, 'top-1')).toBeNull();
+
+      const emptyRight = {
+        pairs: [
+          { id: 'p-1', left: 'A', right: '', evidence: 'E1', sourceIds: ['doc-1'] },
+          { id: 'p-2', left: 'B', right: '2', evidence: 'E2', sourceIds: ['doc-1'] },
+          { id: 'p-3', left: 'C', right: '3', evidence: 'E3', sourceIds: ['doc-1'] },
+        ],
+      };
+      expect(validateMatchingTask(emptyRight, allowedIds, 'top-1')).toBeNull();
+    });
+
+    it('rejects task with trivial/identical wording between left and right', () => {
+      const trivialPair = {
+        pairs: [
+          { id: 'p-1', left: 'Firewall', right: 'Firewall', evidence: 'E1', sourceIds: ['doc-1'] },
+          { id: 'p-2', left: 'Router', right: 'Netzwerkgerät', evidence: 'E2', sourceIds: ['doc-1'] },
+          { id: 'p-3', left: 'Switch', right: 'Verteiler', evidence: 'E3', sourceIds: ['doc-1'] },
+        ],
+      };
+
+      expect(validateMatchingTask(trivialPair, allowedIds, 'top-1')).toBeNull();
+    });
+
+    it('rejects task with duplicate left or duplicate right items', () => {
+      const dupLeft = {
+        pairs: [
+          { id: 'p-1', left: 'Cloud', right: 'Def 1', evidence: 'E1', sourceIds: ['doc-1'] },
+          { id: 'p-2', left: 'Cloud', right: 'Def 2', evidence: 'E2', sourceIds: ['doc-1'] },
+          { id: 'p-3', left: 'Server', right: 'Def 3', evidence: 'E3', sourceIds: ['doc-1'] },
+        ],
+      };
+      expect(validateMatchingTask(dupLeft, allowedIds, 'top-1')).toBeNull();
+    });
+
+    it('rejects task if any source ID is hallucinated/invalid', () => {
+      const fakeSource = {
+        pairs: [
+          { id: 'p-1', left: 'A', right: '1', evidence: 'E1', sourceIds: ['doc-1'] },
+          { id: 'p-2', left: 'B', right: '2', evidence: 'E2', sourceIds: ['hallucinated-doc-99'] },
+          { id: 'p-3', left: 'C', right: '3', evidence: 'E3', sourceIds: ['doc-1'] },
+        ],
+      };
+
+      expect(validateMatchingTask(fakeSource, allowedIds, 'top-1')).toBeNull();
+    });
+
+    it('rejects task if pair is missing evidence', () => {
+      const missingEvidence = {
+        pairs: [
+          { id: 'p-1', left: 'A', right: '1', evidence: '', sourceIds: ['doc-1'] },
+          { id: 'p-2', left: 'B', right: '2', evidence: 'E2', sourceIds: ['doc-1'] },
+          { id: 'p-3', left: 'C', right: '3', evidence: 'E3', sourceIds: ['doc-1'] },
+        ],
+      };
+
+      expect(validateMatchingTask(missingEvidence, allowedIds, 'top-1')).toBeNull();
+    });
+
+    it('enforces allowed topic IDs boundary if specified', () => {
+      const allowedTopics = new Set(['top-allowed']);
+      const valid = {
+        topicId: 'top-forbidden',
+        pairs: [
+          { id: 'p-1', left: 'A', right: '1', evidence: 'E1', sourceIds: ['doc-1'] },
+          { id: 'p-2', left: 'B', right: '2', evidence: 'E2', sourceIds: ['doc-1'] },
+          { id: 'p-3', left: 'C', right: '3', evidence: 'E3', sourceIds: ['doc-1'] },
+        ],
+      };
+
+      expect(validateMatchingTask(valid, allowedIds, 'top-allowed', allowedTopics)).toBeNull();
+    });
+  });
+
+  describe('generateMatchingTask', () => {
+    it('successfully generates a matching task with mocked DeepSeek response', async () => {
+      const context: GroundedKnowledgeContext = {
+        subjectId: 'sub-1',
+        subjectName: 'Informatik',
+        topicIds: ['top-1'],
+        topicNames: ['Cloud-Management'],
+        sources: [
+          {
+            id: 'doc-1',
+            type: 'document',
+            title: 'Cloud Skript',
+            content: 'IaaS bietet Rechen- und Speicherressourcen. PaaS bietet Entwicklungsplattformen. SaaS bietet fertige Anwendungen.',
+          },
+        ],
+      };
+
+      const mockResponse = {
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                topicId: 'top-1',
+                instruction: 'Ordne die Servicemodelle ihren Beschreibungen zu.',
+                pairs: [
+                  {
+                    id: 'pair-1',
+                    left: 'IaaS',
+                    right: 'Rechen- und Speicherressourcen',
+                    evidence: 'IaaS bietet Rechen- und Speicherressourcen.',
+                    sourceIds: ['doc-1'],
+                  },
+                  {
+                    id: 'pair-2',
+                    left: 'PaaS',
+                    right: 'Entwicklungsplattformen',
+                    evidence: 'PaaS bietet Entwicklungsplattformen.',
+                    sourceIds: ['doc-1'],
+                  },
+                  {
+                    id: 'pair-3',
+                    left: 'SaaS',
+                    right: 'Fertige Anwendungen',
+                    evidence: 'SaaS bietet fertige Anwendungen.',
+                    sourceIds: ['doc-1'],
+                  },
+                ],
+              }),
+            },
+          },
+        ],
+      };
+
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => mockResponse,
+      });
+
+      const task = await generateMatchingTask(context, {
+        apiKey: 'valid-api-key',
+        targetTopicId: 'top-1',
+        targetTopicName: 'Cloud-Management',
+        difficulty: 'mittel',
+        fetchFn: mockFetch as any,
+      });
+
+      expect(task).toBeDefined();
+      expect(task.mode).toBe('matching');
+      expect(task.pairs.length).toBe(3);
+      expect(task.pairs[0].left).toBe('IaaS');
+      expect(task.pairs[0].right).toBe('Rechen- und Speicherressourcen');
+      expect(task.sourceIds).toEqual(['doc-1']);
+
+      const calledBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(calledBody.messages[0].content).toContain('Matching (Zuordnen)');
+      expect(calledBody.messages[1].content).toContain('SCHWERPUNKT-THEMA FÜR DIESE ZUORDNUNG: Cloud-Management');
     });
   });
 });

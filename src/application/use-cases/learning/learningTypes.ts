@@ -5,7 +5,7 @@
  * grounded in retrieved sources (user documents + verified web sources).
  */
 
-export type LearningMode = 'quiz' | 'flashcards' | 'fill-in-the-blank';
+export type LearningMode = 'quiz' | 'flashcards' | 'fill-in-the-blank' | 'matching';
 
 export type LearningDifficulty = 'leicht' | 'mittel' | 'schwer';
 
@@ -81,7 +81,26 @@ export interface FillInBlankTask {
   sourceIds: string[];
 }
 
-export type LearningTask = QuizTask | FlashcardTask | FillInBlankTask;
+export interface MatchingPair {
+  id: string;
+  left: string;
+  right: string;
+  sourceIds: string[];
+  evidence: string;
+}
+
+export interface MatchingTask {
+  id: string;
+  mode: 'matching';
+  topicId: string;
+  topicName?: string;
+  difficulty?: LearningDifficulty;
+  instruction: string;
+  pairs: MatchingPair[];
+  sourceIds: string[];
+}
+
+export type LearningTask = QuizTask | FlashcardTask | FillInBlankTask | MatchingTask;
 
 export interface CompletedQuizTask {
   task: QuizTask;
@@ -102,7 +121,17 @@ export interface CompletedFillInBlankTask {
   completedAt: string;
 }
 
-export type CompletedTask = CompletedQuizTask | CompletedFlashcardTask | CompletedFillInBlankTask;
+export interface CompletedMatchingTask {
+  task: MatchingTask;
+  matchedPairsCount: number;
+  completedAt: string;
+}
+
+export type CompletedTask =
+  | CompletedQuizTask
+  | CompletedFlashcardTask
+  | CompletedFillInBlankTask
+  | CompletedMatchingTask;
 
 export interface QuizSessionSummary {
   totalQuestions: number;
@@ -132,5 +161,16 @@ export interface FillInBlankSessionSummary {
     topicName: string;
     total: number;
     correct: number;
+  }>;
+}
+
+export interface MatchingSessionSummary {
+  totalTasks: number;
+  totalPairs: number;
+  byTopic: Array<{
+    topicId: string;
+    topicName: string;
+    total: number;
+    pairs: number;
   }>;
 }

@@ -15,6 +15,7 @@ import {
   Globe,
   Trophy,
   BarChart2,
+  GitCompare,
 } from 'lucide-react';
 import { useAuth } from '../../infrastructure/auth/AuthContext';
 import { Subject, getSubjects } from '../../application/use-cases/subjects';
@@ -26,6 +27,7 @@ import {
   generateQuizTask,
   generateFlashcardTask,
   generateFillInBlankTask,
+  generateMatchingTask,
   BLANK_MARKER,
   checkFillInBlankAnswer,
 } from '../../application/use-cases/learning/learnGenerator';
@@ -34,6 +36,7 @@ import type {
   CompletedQuizTask,
   CompletedFlashcardTask,
   CompletedFillInBlankTask,
+  CompletedMatchingTask,
   FillInBlankSessionSummary,
   FillInBlankTask,
   FlashcardSessionSummary,
@@ -43,6 +46,9 @@ import type {
   LearningDifficulty,
   LearningMode,
   LearningTask,
+  MatchingPair,
+  MatchingSessionSummary,
+  MatchingTask,
   QuizSessionSummary,
   QuizTask,
 } from '../../application/use-cases/learning/learningTypes';
@@ -79,6 +85,11 @@ export function LearnPage() {
   const [isAnswerRevealed, setIsAnswerRevealed] = useState(false);
   const [fillBlankInput, setFillBlankInput] = useState<string>('');
   const [fillBlankResult, setFillBlankResult] = useState<{ isCorrect: boolean } | null>(null);
+
+  // Interaction State for Matching (Zuordnen)
+  const [selectedLeftId, setSelectedLeftId] = useState<string | null>(null);
+  const [matchedPairIds, setMatchedPairIds] = useState<string[]>([]);
+  const [mismatchAttempt, setMismatchAttempt] = useState<{ leftId: string; rightId: string } | null>(null);
 
   useEffect(() => {
     async function loadTaxonomy() {
@@ -148,6 +159,9 @@ export function LearnPage() {
     setIsAnswerRevealed(false);
     setFillBlankInput('');
     setFillBlankResult(null);
+    setSelectedLeftId(null);
+    setMatchedPairIds([]);
+    setMismatchAttempt(null);
     setError(null);
   };
 
@@ -254,7 +268,9 @@ export function LearnPage() {
           ? 'Erstelle quellenbasierte Karteikarte…'
           : selectedMode === 'fill-in-the-blank'
             ? 'Erstelle quellenbasierten Lückentext…'
-            : 'Erstelle quellenbasierte Quiz-Aufgabe…',
+            : selectedMode === 'matching'
+              ? 'Erstelle quellenbasierte Zuordnungsaufgabe…'
+              : 'Erstelle quellenbasierte Quiz-Aufgabe…',
       );
       const { targetTopicId, targetTopicName } = getNextTargetTopic(context, []);
       let task: LearningTask;
@@ -266,6 +282,12 @@ export function LearnPage() {
         });
       } else if (selectedMode === 'fill-in-the-blank') {
         task = await generateFillInBlankTask(context, {
+          targetTopicId,
+          targetTopicName,
+          difficulty,
+        });
+      } else if (selectedMode === 'matching') {
+        task = await generateMatchingTask(context, {
           targetTopicId,
           targetTopicName,
           difficulty,
@@ -288,7 +310,7 @@ export function LearnPage() {
   };
 
   const handleSelectAnswerOption = (option: string) => {
-    if (isAnswerRevealed || !currentTask || currentTask.mode === 'flashcards' || currentTask.mode === 'fill-in-the-blank') return;
+    if (isAnswerRevealed || !currentTask || (currentTask.mode && currentTask.mode !== 'quiz') || !('options' in currentTask)) return;
     setSelectedAnswer(option);
     setIsAnswerRevealed(true);
 
@@ -336,6 +358,54 @@ export function LearnPage() {
     setCompletedTasks((prev) => [...prev, completedRecord]);
   };
 
+  const handleSelectMatchingLeft = (pairId: string) => {
+    if (matchedPairIds.includes(pairId)) return;
+    setMismatchAttempt(null);
+    setSelectedLeftId((prev) => (prev === pairId ? null : pairId));
+  };
+
+  const handleSelectMatchingRight = (pairId: string) => {
+    if (matchedPairIds.includes(pairId)) return;
+    if (!currentTask || currentTask.mode !== 'matching') return;
+
+    if (!selectedLeftId) {
+      // Nothing selected on the left yet
+      return;
+    }
+
+    if (selectedLeftId === pairId) {
+      // Correct Match!
+      const nextMatched = [...matchedPairIds, pairId];
+      setMatchedPairIds(nextMatched);
+      setSelectedLeftId(null);
+      setMismatchAttempt(null);
+
+      // If all pairs are matched, complete the task
+      if (nextMatched.length === currentTask.pairs.length) {
+        setIsAnswerRevealed(true);
+        const completedRecord: CompletedMatchingTask = {
+          task: currentTask,
+          matchedPairsCount: nextMatched.length,
+          completedAt: new Date().toISOString(),
+        };
+        setCompletedTasks((prev) => [...prev, completedRecord]);
+      }
+    } else {
+      // Incorrect Match
+      const failedLeftId = selectedLeftId;
+      setMismatchAttempt({ leftId: failedLeftId, rightId: pairId });
+      setSelectedLeftId(null);
+      setTimeout(() => {
+        setMismatchAttempt((curr) => {
+          if (curr?.leftId === failedLeftId && curr?.rightId === pairId) {
+            return null;
+          }
+          return curr;
+        });
+      }, 1000);
+    }
+  };
+
   const handleNextTask = async () => {
     if (!knowledgeContext) return;
 
@@ -350,6 +420,9 @@ export function LearnPage() {
     setIsAnswerRevealed(false);
     setFillBlankInput('');
     setFillBlankResult(null);
+    setSelectedLeftId(null);
+    setMatchedPairIds([]);
+    setMismatchAttempt(null);
     setGenerationStep('Generiere nächste Aufgabe auf Basis der Quellen…');
 
     try {
@@ -358,7 +431,11 @@ export function LearnPage() {
         completedTasks,
       );
       const avoidQuestions = completedTasks.map((c) =>
-        'question' in c.task ? c.task.question : c.task.sentenceWithBlank,
+        'question' in c.task
+          ? c.task.question
+          : 'sentenceWithBlank' in c.task
+            ? c.task.sentenceWithBlank
+            : c.task.instruction,
       );
 
       let task: LearningTask;
@@ -375,6 +452,12 @@ export function LearnPage() {
           targetTopicName,
           difficulty,
           avoidSentences: avoidQuestions,
+        });
+      } else if (selectedMode === 'matching') {
+        task = await generateMatchingTask(knowledgeContext, {
+          targetTopicId,
+          targetTopicName,
+          difficulty,
         });
       } else {
         task = await generateQuizTask(knowledgeContext, {
@@ -508,6 +591,49 @@ export function LearnPage() {
     return {
       totalTasks: completedTasks.length,
       correctCount,
+      byTopic,
+    };
+  }, [isSessionComplete, completedTasks, knowledgeContext, selectedMode]);
+
+  const matchingSummary: MatchingSessionSummary | null = useMemo(() => {
+    if (
+      !isSessionComplete ||
+      completedTasks.length === 0 ||
+      !knowledgeContext ||
+      selectedMode !== 'matching'
+    ) {
+      return null;
+    }
+
+    const byTopicMap = new Map<string, { total: number; pairs: number }>();
+    knowledgeContext.topicIds.forEach((tId) => {
+      byTopicMap.set(tId, { total: 0, pairs: 0 });
+    });
+
+    let totalPairs = 0;
+    completedTasks.forEach((c) => {
+      const pairsCount = 'matchedPairsCount' in c ? c.matchedPairsCount : 0;
+      totalPairs += pairsCount;
+      const current = byTopicMap.get(c.task.topicId) ?? { total: 0, pairs: 0 };
+      byTopicMap.set(c.task.topicId, {
+        total: current.total + 1,
+        pairs: current.pairs + pairsCount,
+      });
+    });
+
+    const byTopic = knowledgeContext.topicIds.map((tId, idx) => {
+      const stats = byTopicMap.get(tId) ?? { total: 0, pairs: 0 };
+      return {
+        topicId: tId,
+        topicName: knowledgeContext.topicNames[idx] || tId,
+        total: stats.total,
+        pairs: stats.pairs,
+      };
+    });
+
+    return {
+      totalTasks: completedTasks.length,
+      totalPairs,
       byTopic,
     };
   }, [isSessionComplete, completedTasks, knowledgeContext, selectedMode]);
@@ -736,7 +862,7 @@ export function LearnPage() {
                   <Sparkles className="w-4 h-4 text-slate-400" />
                   <span>4. Lernmodus</span>
                 </label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   <button
                     type="button"
                     onClick={() => setSelectedMode('quiz')}
@@ -808,6 +934,30 @@ export function LearnPage() {
                       </span>
                     )}
                   </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedMode('matching')}
+                    className={cn(
+                      'p-3.5 rounded-xl border text-left transition-[background-color,border-color,box-shadow,transform] duration-150 active:scale-[0.99] cursor-pointer flex flex-col justify-between focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
+                      selectedMode === 'matching'
+                        ? 'border-blue-500 bg-blue-50/50 shadow-2xs'
+                        : 'border-slate-200 bg-white hover:bg-slate-50',
+                    )}
+                  >
+                    <div>
+                      <div className="font-semibold text-sm text-slate-900">Zuordnen</div>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Begriffe und Zusammenhänge richtig zuordnen.
+                      </p>
+                    </div>
+                    {selectedMode === 'matching' && (
+                      <span className="text-[11px] font-semibold text-blue-600 mt-3 inline-flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        Ausgewählt
+                      </span>
+                    )}
+                  </button>
                 </div>
               </div>
             </div>
@@ -830,7 +980,11 @@ export function LearnPage() {
               >
                 <span>
                   Lernsession starten ({SESSION_QUESTION_LIMIT}{' '}
-                  {selectedMode === 'flashcards' ? 'Karten' : 'Fragen'})
+                  {selectedMode === 'flashcards'
+                    ? 'Karten'
+                    : selectedMode === 'matching' || selectedMode === 'fill-in-the-blank'
+                      ? 'Aufgaben'
+                      : 'Fragen'})
                 </span>
                 <ArrowRight className="w-4 h-4" />
               </button>
@@ -851,16 +1005,16 @@ export function LearnPage() {
       )}
 
       {/* Session Completed Summary Screen */}
-      {isSessionComplete && (quizSummary || flashcardSummary || fillBlankSummary) && !isGenerating && (
+      {isSessionComplete && (quizSummary || flashcardSummary || fillBlankSummary || matchingSummary) && !isGenerating && (
         <div className="bg-white border border-slate-200/90 rounded-xl p-5 sm:p-8 shadow-2xs space-y-6">
           <div className="text-center space-y-2">
             <div className={cn(
               'w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-2',
-              selectedMode === 'flashcards'
+              selectedMode === 'flashcards' || selectedMode === 'matching'
                 ? 'bg-blue-50/90 text-blue-600 border border-blue-100/80'
                 : 'bg-amber-50/90 text-amber-600 border border-amber-100/80',
             )}>
-              {selectedMode === 'flashcards' ? (
+              {selectedMode === 'flashcards' || selectedMode === 'matching' ? (
                 <Sparkles className="w-6 h-6" />
               ) : (
                 <Trophy className="w-6 h-6" />
@@ -871,20 +1025,24 @@ export function LearnPage() {
                 ? 'Karteikarten-Session abgeschlossen!'
                 : selectedMode === 'fill-in-the-blank'
                   ? 'Lückentext-Session abgeschlossen!'
-                  : 'Quiz abgeschlossen!'}
+                  : selectedMode === 'matching'
+                    ? 'Zuordnungs-Session abgeschlossen!'
+                    : 'Quiz abgeschlossen!'}
             </h2>
             <p className="text-sm text-slate-500">
               {selectedMode === 'flashcards'
                 ? `Du hast alle ${completedTasks.length} Karteikarten durchgearbeitet.`
                 : selectedMode === 'fill-in-the-blank'
                   ? `Du hast ${fillBlankSummary?.correctCount ?? 0} von ${fillBlankSummary?.totalTasks ?? 0} Lücken richtig ergänzt.`
-                  : `Du hast ${quizSummary?.correctCount ?? 0} von ${quizSummary?.totalQuestions ?? 0} Fragen richtig beantwortet.`}
+                  : selectedMode === 'matching'
+                    ? `Du hast alle ${matchingSummary?.totalPairs ?? 0} Paare in ${completedTasks.length} Aufgaben erfolgreich zugeordnet.`
+                    : `Du hast ${quizSummary?.correctCount ?? 0} von ${quizSummary?.totalQuestions ?? 0} Fragen richtig beantwortet.`}
             </p>
           </div>
 
           <div className="p-3.5 sm:p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-3">
             <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              {selectedMode === 'flashcards' ? 'Bearbeitete Themen' : 'Ergebnis nach Themen'}
+              {selectedMode === 'flashcards' || selectedMode === 'matching' ? 'Bearbeitete Themen' : 'Ergebnis nach Themen'}
             </h3>
             <div className="space-y-2">
               {selectedMode === 'flashcards' && flashcardSummary
@@ -899,6 +1057,18 @@ export function LearnPage() {
                       </span>
                     </div>
                   ))
+                : selectedMode === 'matching' && matchingSummary
+                  ? matchingSummary.byTopic.map((item) => (
+                      <div
+                        key={item.topicId}
+                        className="flex items-center justify-between p-3 rounded-lg bg-white border border-slate-200/70 text-sm gap-2"
+                      >
+                        <span className="font-medium text-slate-800 truncate">{item.topicName}</span>
+                        <span className="text-xs font-semibold text-slate-600 shrink-0">
+                          {item.pairs} {item.pairs === 1 ? 'Paar' : 'Paare'} ({item.total} {item.total === 1 ? 'Aufgabe' : 'Aufgaben'})
+                        </span>
+                      </div>
+                    ))
                 : (fillBlankSummary || quizSummary)?.byTopic.map((item) => (
                     <div
                       key={item.topicId}
@@ -954,7 +1124,7 @@ export function LearnPage() {
                 <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
                   {selectedMode === 'flashcards'
                     ? 'Karte'
-                    : selectedMode === 'fill-in-the-blank'
+                    : selectedMode === 'matching' || selectedMode === 'fill-in-the-blank'
                       ? 'Aufgabe'
                       : 'Frage'}{' '}
                   {currentQuestionNumber} von {SESSION_QUESTION_LIMIT}
@@ -1330,10 +1500,195 @@ export function LearnPage() {
             </div>
           )}
 
+          {/* Zuordnen (Matching) Task View */}
+          {selectedMode === 'matching' && currentTask.mode === 'matching' && (() => {
+            // Shuffle right items deterministically based on task id so it stays stable during matches
+            const shuffledRightPairs = [...currentTask.pairs].sort((a, b) => {
+              const hashA = (a.id + currentTask.id).split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+              const hashB = (b.id + currentTask.id).split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+              return hashA - hashB;
+            });
+
+            const isAllMatched = matchedPairIds.length === currentTask.pairs.length;
+
+            return (
+              <div className="w-full max-w-3xl mx-auto bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-7 shadow-xs space-y-6">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                  <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                    Zuordnen · {matchedPairIds.length} von {currentTask.pairs.length} zugeordnet
+                  </span>
+                  <span className="text-xs text-slate-400">
+                    {isAllMatched ? '✓ Alle Paare zugeordnet' : 'Klicke Begriff, dann Erklärung'}
+                  </span>
+                </div>
+
+                {/* Instruction */}
+                <div>
+                  <h2 className="text-base sm:text-lg font-semibold text-slate-900 leading-snug">
+                    {currentTask.instruction}
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Wähle zuerst ein Element aus der linken Spalte und klicke anschließend auf das passende Gegenstück rechts.
+                  </p>
+                </div>
+
+                {/* Matching Area: Two Columns (stacked on mobile) */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Left Column (Terms / Concepts) */}
+                  <div className="space-y-2.5">
+                    <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider px-1">
+                      Begriffe
+                    </div>
+                    <div className="space-y-2">
+                      {currentTask.pairs.map((pair) => {
+                        const isMatched = matchedPairIds.includes(pair.id);
+                        const isSelected = selectedLeftId === pair.id;
+                        const isMismatched = mismatchAttempt?.leftId === pair.id;
+
+                        return (
+                          <button
+                            key={`left-${pair.id}`}
+                            type="button"
+                            disabled={isMatched}
+                            onClick={() => handleSelectMatchingLeft(pair.id)}
+                            className={cn(
+                              'w-full p-3 sm:p-3.5 rounded-xl border text-left text-sm font-medium transition-[background-color,border-color,box-shadow,color,transform] duration-150 flex items-center justify-between gap-2.5',
+                              isMatched &&
+                                'border-slate-200/70 bg-slate-100/60 text-slate-400 opacity-60 cursor-default shadow-none',
+                              !isMatched &&
+                                isSelected &&
+                                'border-blue-600 bg-blue-50/80 text-blue-900 shadow-2xs cursor-pointer ring-1 ring-blue-600',
+                              !isMatched &&
+                                isMismatched &&
+                                'border-red-500 bg-red-50/80 text-red-900',
+                              !isMatched &&
+                                !isSelected &&
+                                !isMismatched &&
+                                'border-slate-200/90 bg-white text-slate-800 hover:bg-slate-50 hover:border-slate-300 shadow-2xs cursor-pointer active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
+                            )}
+                            aria-pressed={isSelected}
+                            aria-disabled={isMatched}
+                          >
+                            <span className="break-words min-w-0 flex-1">{pair.left}</span>
+                            {isMatched && (
+                              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                            )}
+                            {isMismatched && (
+                              <XCircle className="w-4 h-4 text-red-500 shrink-0" />
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Right Column (Definitions / Descriptions) */}
+                  <div className="space-y-2.5">
+                    <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider px-1">
+                      Zuordnungen
+                    </div>
+                    <div className="space-y-2">
+                      {shuffledRightPairs.map((pair) => {
+                        const isMatched = matchedPairIds.includes(pair.id);
+                        const isMismatched = mismatchAttempt?.rightId === pair.id;
+
+                        return (
+                          <button
+                            key={`right-${pair.id}`}
+                            type="button"
+                            disabled={isMatched}
+                            onClick={() => handleSelectMatchingRight(pair.id)}
+                            className={cn(
+                              'w-full p-3 sm:p-3.5 rounded-xl border text-left text-xs sm:text-sm transition-[background-color,border-color,box-shadow,color,transform] duration-150 flex items-center justify-between gap-2.5 leading-relaxed',
+                              isMatched &&
+                                'border-slate-200/70 bg-slate-100/60 text-slate-400 opacity-60 cursor-default shadow-none',
+                              !isMatched &&
+                                isMismatched &&
+                                'border-red-500 bg-red-50/80 text-red-900',
+                              !isMatched &&
+                                !isMismatched &&
+                                selectedLeftId &&
+                                'border-blue-200/90 bg-blue-50/30 hover:bg-blue-50/70 hover:border-blue-400 text-slate-800 shadow-2xs cursor-pointer active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
+                              !isMatched &&
+                                !isMismatched &&
+                                !selectedLeftId &&
+                                'border-slate-200/90 bg-white text-slate-800 hover:bg-slate-50 hover:border-slate-300 shadow-2xs cursor-pointer active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
+                            )}
+                            aria-disabled={isMatched}
+                          >
+                            <span className="break-words min-w-0 flex-1">{pair.right}</span>
+                            {isMatched && (
+                              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                            )}
+                            {isMismatched && (
+                              <XCircle className="w-4 h-4 text-red-500 shrink-0" />
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Completion & Next Action when all pairs are matched */}
+                {isAllMatched && (
+                  <div className="pt-4 border-t border-slate-100 space-y-4">
+                    <div className="p-3.5 sm:p-4 rounded-xl bg-emerald-50/80 border border-emerald-200/90 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5">
+                        <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                        <div>
+                          <p className="text-sm font-semibold text-emerald-950">
+                            Alles richtig zugeordnet!
+                          </p>
+                          <p className="text-xs text-emerald-800 mt-0.5">
+                            Alle {currentTask.pairs.length} Paare wurden erfolgreich verknüpft.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Evidence Quotes list for learning reinforcement */}
+                    <div className="space-y-2">
+                      <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                        Belege aus den Quellen:
+                      </div>
+                      <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                        {currentTask.pairs.map((p) => (
+                          <div
+                            key={`ev-${p.id}`}
+                            className="p-2.5 rounded-lg bg-slate-50 border border-slate-200/70 text-xs text-slate-700 leading-relaxed"
+                          >
+                            <span className="font-semibold text-slate-900">{p.left}:</span>{' '}
+                            „{p.evidence}“
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end pt-2">
+                      <button
+                        type="button"
+                        onClick={handleNextTask}
+                        className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-sm font-medium rounded-xl shadow-xs transition-[background-color,transform] duration-150 cursor-pointer active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+                      >
+                        <span>
+                          {completedTasks.length >= SESSION_QUESTION_LIMIT
+                            ? 'Ergebnis ansehen'
+                            : 'Nächste Aufgabe'}
+                        </span>
+                        <ArrowRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
           {/* Sources Grounding Block (Mandatory) */}
           <div className={cn(
             'bg-white border border-slate-200/90 rounded-xl p-4 sm:p-5 shadow-2xs space-y-3',
-            (selectedMode === 'flashcards' || selectedMode === 'fill-in-the-blank') && 'max-w-2xl mx-auto w-full',
+            (selectedMode === 'flashcards' || selectedMode === 'fill-in-the-blank' || selectedMode === 'matching') && 'max-w-3xl mx-auto w-full',
           )}>
             <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
               <Layers className="w-3.5 h-3.5 text-slate-400" />

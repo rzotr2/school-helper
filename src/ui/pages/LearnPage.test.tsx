@@ -390,4 +390,171 @@ describe('LearnPage component', () => {
     // Next action button
     expect(container.textContent).toContain('Nächste Aufgabe');
   });
+
+  it('selects and runs Zuordnen (matching) mode with tactile matching and completion', async () => {
+    const mockMatchingTask = {
+      id: 'match-1',
+      mode: 'matching' as const,
+      topicId: 'top-1',
+      difficulty: 'mittel' as const,
+      instruction: 'Ordne die Cloud-Begriffe den passenden Erläuterungen zu.',
+      pairs: [
+        {
+          id: 'p1',
+          left: 'IaaS',
+          right: 'Bereitstellung von virtualisierter Recheninfrastruktur',
+          sourceIds: ['doc-1'],
+          evidence: 'IaaS bietet grundlegende Rechen- und Speicherressourcen.',
+        },
+        {
+          id: 'p2',
+          left: 'PaaS',
+          right: 'Plattform für Entwickler ohne Server-Management',
+          sourceIds: ['web-1'],
+          evidence: 'PaaS Plattform für Entwickler ohne Server-Management.',
+        },
+        {
+          id: 'p3',
+          left: 'SaaS',
+          right: 'Anwendungssoftware direkt über den Webbrowser nutzen',
+          sourceIds: ['doc-1'],
+          evidence: 'SaaS ermöglicht direkte Anwendungssoftware im Browser.',
+        },
+      ],
+      evidence: 'IaaS bietet grundlegende Rechen- und Speicherressourcen.',
+      sourceIds: ['doc-1', 'web-1'],
+    };
+
+    const mockGenMatching = vi
+      .spyOn(generatorApi, 'generateMatchingTask')
+      .mockResolvedValue(mockMatchingTask);
+
+    await renderComponent();
+
+    // Select topic
+    const topicBtn = Array.from(container.querySelectorAll('button')).find((btn) =>
+      btn.textContent?.includes('Cloud-Management'),
+    );
+    await act(async () => {
+      topicBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    // Select Zuordnen mode
+    const matchingModeBtn = Array.from(container.querySelectorAll('button')).find((btn) =>
+      btn.textContent?.includes('Zuordnen'),
+    );
+    expect(matchingModeBtn).toBeDefined();
+    await act(async () => {
+      matchingModeBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    // Verify button label
+    expect(container.textContent).toContain('Lernsession starten (5 Aufgaben)');
+
+    // Start session
+    const startBtn = Array.from(container.querySelectorAll('button')).find((btn) =>
+      btn.textContent?.includes('Lernsession starten'),
+    );
+    await act(async () => {
+      startBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(mockGenMatching).toHaveBeenCalledTimes(1);
+
+    // Initial matching view
+    expect(container.textContent).toContain('Aufgabe 1 von 5');
+    expect(container.textContent).toContain('Ordne die Cloud-Begriffe den passenden Erläuterungen zu.');
+    expect(container.textContent).toContain('0 von 3 zugeordnet');
+    expect(container.textContent).toContain('IaaS');
+    expect(container.textContent).toContain('PaaS');
+    expect(container.textContent).toContain('SaaS');
+
+    // Find left button for IaaS
+    const iaasBtn = Array.from(container.querySelectorAll('button')).find(
+      (btn) => btn.textContent?.trim() === 'IaaS',
+    );
+    expect(iaasBtn).toBeDefined();
+
+    // Click IaaS (left)
+    await act(async () => {
+      iaasBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    // IaaS should have aria-pressed true
+    expect(iaasBtn?.getAttribute('aria-pressed')).toBe('true');
+
+    // Find mismatched right button: PaaS right description
+    const paasRightBtn = Array.from(container.querySelectorAll('button')).find((btn) =>
+      btn.textContent?.includes('Plattform für Entwickler'),
+    );
+    expect(paasRightBtn).toBeDefined();
+
+    // Click wrong right match
+    await act(async () => {
+      paasRightBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    // Still 0 of 3 pairs matched
+    expect(container.textContent).toContain('0 von 3 zugeordnet');
+
+    // Click IaaS again to select it
+    await act(async () => {
+      iaasBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    // Find correct right button for IaaS
+    const iaasRightBtn = Array.from(container.querySelectorAll('button')).find((btn) =>
+      btn.textContent?.includes('Bereitstellung von virtualisierter Recheninfrastruktur'),
+    );
+    expect(iaasRightBtn).toBeDefined();
+
+    // Click correct match
+    await act(async () => {
+      iaasRightBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    // Now 1 of 3 pairs matched
+    expect(container.textContent).toContain('1 von 3 zugeordnet');
+    expect(iaasBtn?.disabled).toBe(true);
+    expect(iaasRightBtn?.disabled).toBe(true);
+
+    // Match 2nd pair (PaaS)
+    const paasBtn = Array.from(container.querySelectorAll('button')).find(
+      (btn) => btn.textContent?.trim() === 'PaaS',
+    );
+    const activePaasRightBtn = Array.from(container.querySelectorAll('button')).find((btn) =>
+      btn.textContent?.includes('Plattform für Entwickler'),
+    );
+    await act(async () => {
+      paasBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await act(async () => {
+      activePaasRightBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.textContent).toContain('2 von 3 zugeordnet');
+
+    // Match 3rd pair (SaaS)
+    const saasBtn = Array.from(container.querySelectorAll('button')).find(
+      (btn) => btn.textContent?.trim() === 'SaaS',
+    );
+    await act(async () => {
+      saasBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    const saasRightBtn = Array.from(container.querySelectorAll('button')).find((btn) =>
+      btn.textContent?.includes('Anwendungssoftware direkt'),
+    );
+    await act(async () => {
+      saasRightBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    // All pairs matched! Task completed state should render
+    expect(container.textContent).toContain('3 von 3 zugeordnet');
+    expect(container.textContent).toContain('Alles richtig zugeordnet!');
+    expect(container.textContent).toContain('Belege aus den Quellen:');
+    expect(container.textContent).toContain('Verifizierte Quellen dieser Aufgabe');
+    expect(container.textContent).toContain('Cloud_Skript.pdf');
+    expect(container.textContent).toContain('AWS Docs');
+    expect(container.textContent).toContain('Nächste Aufgabe');
+  });
 });
+
