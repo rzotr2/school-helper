@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Loader2, ChevronRight, Folder, FileText, Upload, Trash2, ExternalLink, Edit2, FolderInput, AlertCircle, X, RefreshCw, Sparkles } from 'lucide-react';
+import { Loader2, ChevronRight, Folder, FileText, Upload, Trash2, ExternalLink, Edit2, FolderInput, AlertCircle, X, RefreshCw, Sparkles, GraduationCap } from 'lucide-react';
 import { Button } from '../components/Button';
 import { NameDialog } from '../components/NameDialog';
 import { MoveDocumentDialog } from '../components/MoveDocumentDialog';
@@ -14,6 +14,11 @@ import {
 import { DocumentInfoModal } from '../components/pdf/DocumentInfoModal';
 import { useDocumentActions } from '../hooks/useDocumentActions';
 import { useDocumentProcessing } from '../hooks/useDocumentProcessing';
+import { useLearningProgress } from '../hooks/useLearningProgress';
+import {
+  formatLearningStateLabel,
+  formatRelativeDate,
+} from '../../application/use-cases/learning/learningProgress';
 import { formatFileSize, formatDate } from '../../shared/utils/format';
 import { cn } from '../../shared/utils/cn';
 import { useAuth } from '../../infrastructure/auth/AuthContext';
@@ -36,6 +41,9 @@ export function TopicPage() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const { getTopicProgress } = useLearningProgress(user?.id);
+  const topicProgress = topic ? getTopicProgress(topic.id) : null;
 
   // Shared document action handlers and their dialog state. The page shows a
   // single topic, so documents moved elsewhere leave the list.
@@ -280,6 +288,77 @@ export function TopicPage() {
           >
             <X className="w-4 h-4" />
           </button>
+        </div>
+      )}
+
+      {/* Lernfortschritt Card */}
+      {topicProgress && (
+        <div className="bg-white border border-slate-200/90 rounded-xl p-4 sm:p-5 shadow-2xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100">
+                <GraduationCap className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-sm font-semibold text-slate-900">Lernfortschritt</h2>
+                  <span
+                    className={cn(
+                      'text-[11px] font-medium px-2 py-0.5 rounded border',
+                      topicProgress.learningState === 'sicher'
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : topicProgress.learningState === 'ueben'
+                          ? 'bg-amber-50 text-amber-700 border-amber-200'
+                          : topicProgress.learningState === 'wiederholen'
+                            ? 'bg-rose-50 text-rose-700 border-rose-200'
+                            : 'bg-slate-50 text-slate-500 border-slate-200',
+                    )}
+                  >
+                    {formatLearningStateLabel(topicProgress.learningState)}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {topicProgress.completedExercises > 0
+                    ? `${topicProgress.completedExercises} Übungen absolviert · ${topicProgress.correctExercises} richtig · ${topicProgress.incorrectExercises} falsch`
+                    : 'Zu diesem Thema wurden noch keine Übungen absolviert.'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 self-end sm:self-center">
+              {topicProgress.lastStudiedAt && (
+                <span className="text-[11px] text-slate-400 hidden md:inline">
+                  Zuletzt geübt: {formatRelativeDate(topicProgress.lastStudiedAt).dateLabel}
+                </span>
+              )}
+              <Link
+                to={`/learn?subjectId=${subject.id}&topicId=${topic.id}`}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/80 rounded-lg text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+              >
+                <GraduationCap className="w-3.5 h-3.5" />
+                <span>{topicProgress.completedExercises > 0 ? 'Weiterlernen' : 'Jetzt lernen'}</span>
+              </Link>
+            </div>
+          </div>
+
+          {/* Progress bar */}
+          <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+            <div
+              className={cn(
+                'h-full rounded-full transition-all duration-300',
+                topicProgress.learningState === 'sicher'
+                  ? 'bg-emerald-500'
+                  : topicProgress.learningState === 'ueben'
+                    ? 'bg-amber-500'
+                    : topicProgress.learningState === 'wiederholen'
+                      ? 'bg-rose-500'
+                      : 'bg-slate-200',
+              )}
+              style={{
+                width: topicProgress.completedExercises > 0 ? `${topicProgress.accuracyPercentage}%` : '0%',
+              }}
+            />
+          </div>
         </div>
       )}
 

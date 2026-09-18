@@ -714,54 +714,12 @@ describe('LearnPage component', () => {
       checkBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
-    // Should indicate incorrect state without advancing
+    // Should show the amber error banner and reveal correct answers — always reveals on check now
     expect(container.textContent).toContain('Einige Lücken sind noch fehlerhaft');
     expect(container.textContent).not.toContain('Alles richtig ausgefüllt!');
-
-    // Remove 'Blockchain' from blank 1 using its clear button
-    const removeBtn = Array.from(container.querySelectorAll('button')).find(
-      (btn) => btn.getAttribute('aria-label')?.includes('Entferne Blockchain'),
-    );
-    expect(removeBtn).toBeDefined();
-    await act(async () => {
-      removeBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-
-    expect(container.textContent).toContain('Wortbank · 1 von 2 Lücken gefüllt');
-    expect(container.textContent).toContain('[ Lücke 1 ]');
-
-    // Now select correct word 'IaaS-Lösung' and place in blank 1
-    const iaasChip = Array.from(container.querySelectorAll('button')).find(
-      (btn) => btn.textContent?.trim() === 'IaaS-Lösung',
-    );
-    await act(async () => {
-      iaasChip?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-    const blank1SlotAgain = Array.from(container.querySelectorAll('button')).find(
-      (btn) => btn.getAttribute('aria-label')?.includes('Lücke 1'),
-    );
-    await act(async () => {
-      blank1SlotAgain?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-
-    // Now all are correct: blank 1 = 'IaaS-Lösung', blank 2 = 'SaaS'
-    expect(container.textContent).toContain('Wortbank · 2 von 2 Lücken gefüllt');
-
-    // Click Prüfen again
-    const checkBtnAgain = Array.from(container.querySelectorAll('button')).find(
-      (btn) => btn.textContent?.trim() === 'Prüfen',
-    );
-    await act(async () => {
-      checkBtnAgain?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-
-    // Success banner & evidence should now be visible
-    expect(container.textContent).toContain('Alles richtig ausgefüllt!');
-    expect(container.textContent).toContain('Alle 2 Lücken wurden korrekt mit den Begriffen belegt.');
-    expect(container.textContent).toContain('Belege aus den Quellen:');
-    expect(container.textContent).toContain('IaaS bietet grundlegende Rechen- und Speicherressourcen.');
-    expect(container.textContent).toContain('SaaS liefert fertige Software.');
-    expect(container.textContent).toContain('Verifizierte Quellen dieser Aufgabe');
+    // Evidence/correct-answer section should be shown
+    expect(container.textContent).toContain('Richtige Antworten:');
+    // "Nächste Aufgabe" button should appear even after a wrong answer
     expect(container.textContent).toContain('Nächste Aufgabe');
   });
 });

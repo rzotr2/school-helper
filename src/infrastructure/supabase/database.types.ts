@@ -140,6 +140,34 @@ export type Database = {
         };
         Relationships: [];
       };
+      learning_results: {
+        Row: {
+          id: string;
+          user_id: string;
+          subject_id: string;
+          topic_id: string;
+          session_id: string | null;
+          exercise_type: string;
+          is_correct: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id: string;
+          user_id: string;
+          subject_id: string;
+          topic_id: string;
+          session_id?: string | null;
+          exercise_type: string;
+          is_correct: boolean;
+          created_at?: string;
+        };
+        Update: {
+          session_id?: string | null;
+          exercise_type?: string;
+          is_correct?: boolean;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;

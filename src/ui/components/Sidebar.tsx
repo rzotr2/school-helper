@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Folder, FileText, Plus, Loader2, GraduationCap, X, BookOpen, ChevronRight } from 'lucide-react';
+import { Folder, FileText, Plus, Loader2, GraduationCap, X, BookOpen, ChevronRight, BarChart2 } from 'lucide-react';
 import { NavLink, useLocation, Link } from 'react-router-dom';
 import { cn } from '../../shared/utils/cn';
 import { useAuth } from '../../infrastructure/auth/AuthContext';
@@ -17,6 +17,7 @@ import {
 } from '../../application/use-cases/topics';
 import { getSchoolProfile, createSchoolProfile } from '../../application/use-cases/schoolProfile';
 import { NameDialog } from './NameDialog';
+import logoUrl from '../../assets/logo.png';
 
 interface SidebarProps {
   isMobileOpen?: boolean;
@@ -149,7 +150,7 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
     <div className="p-4 flex-1 overflow-y-auto">
       <div className="mb-6">
         <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 px-2">
-          Meine Schule
+          Materia
         </h3>
         <nav className="space-y-0.5">
           <NavLink
@@ -178,6 +179,19 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
           >
             <GraduationCap className="w-4 h-4 shrink-0" />
             <span>Lernen</span>
+          </NavLink>
+          <NavLink
+            to="/profile"
+            onClick={handleLinkClick}
+            className={({ isActive }) =>
+              cn(
+                "flex items-center gap-2 px-2 py-1.5 text-sm rounded-md transition-[background-color,color] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40",
+                isActive ? "bg-blue-50 text-blue-700 font-medium" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+              )
+            }
+          >
+            <BarChart2 className="w-4 h-4 shrink-0" />
+            <span>Lernstatistik</span>
           </NavLink>
         </nav>
       </div>
@@ -319,10 +333,9 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
               <Link
                 to="/"
                 onClick={handleLinkClick}
-                className="flex items-center gap-2 text-slate-900 hover:opacity-90 transition-opacity"
+                className="flex items-center text-slate-900 hover:opacity-90 transition-opacity"
               >
-                <BookOpen className="w-5 h-5 text-blue-600 shrink-0" />
-                <span className="font-semibold text-sm whitespace-nowrap">Meine Schule</span>
+                <img src={logoUrl} alt="Materia" className="h-6 w-auto object-contain" />
               </Link>
               <button
                 type="button"

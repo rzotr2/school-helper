@@ -1,4 +1,10 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import {
+  recordLearningResults,
+  type ExerciseType,
+} from '../../application/use-cases/learning/learningProgress';
+import { safeUUID } from '../../shared/utils/uuid';
 import {
   GraduationCap,
   BookOpen,
@@ -104,6 +110,11 @@ export function LearnPage() {
   const [selectedWordBankToken, setSelectedWordBankToken] = useState<string | null>(null);
   const [wordBankChecked, setWordBankChecked] = useState(false);
 
+  const [searchParams] = useSearchParams();
+  const [sessionId, setSessionId] = useState<string>('');
+  const hasPersistedResultsRef = useRef(false);
+  const persistedTaskIdsRef = useRef<Set<string>>(new Set());
+
   useEffect(() => {
     async function loadTaxonomy() {
       if (!user || isAuthLoading) return;
@@ -118,7 +129,22 @@ export function LearnPage() {
         setTopics(loadedTopics);
         setDocuments(loadedDocs);
 
-        if (loadedSubjects.length > 0) {
+        const paramSubjectId = searchParams.get('subjectId');
+        const paramTopicId = searchParams.get('topicId');
+
+        if (paramTopicId) {
+          const matchingTopic = loadedTopics.find((t) => t.id === paramTopicId);
+          if (matchingTopic) {
+            setSelectedSubjectId(matchingTopic.subjectId);
+            setSelectedTopicIds([matchingTopic.id]);
+          } else if (paramSubjectId && loadedSubjects.some((s) => s.id === paramSubjectId)) {
+            setSelectedSubjectId(paramSubjectId);
+          } else if (loadedSubjects.length > 0) {
+            setSelectedSubjectId(loadedSubjects[0].id);
+          }
+        } else if (paramSubjectId && loadedSubjects.some((s) => s.id === paramSubjectId)) {
+          setSelectedSubjectId(paramSubjectId);
+        } else if (loadedSubjects.length > 0) {
           setSelectedSubjectId(loadedSubjects[0].id);
         }
       } catch (err) {
@@ -128,7 +154,7 @@ export function LearnPage() {
       }
     }
     void loadTaxonomy();
-  }, [user, isAuthLoading]);
+  }, [user, isAuthLoading, searchParams]);
 
   // Document counts per topic (total and completed)
   const topicDocumentCounts = useMemo(() => {
@@ -164,6 +190,17 @@ export function LearnPage() {
     return availableTopics.filter((t) => (topicDocumentCounts.get(t.id)?.completed ?? 0) > 0);
   }, [availableTopics, topicDocumentCounts]);
 
+  // Shuffle matching right-column pairs randomly, re-computed only when the task changes
+  const shuffledRightPairs = useMemo(() => {
+    if (!currentTask || currentTask.mode !== 'matching') return [];
+    const arr = [...currentTask.pairs];
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }, [currentTask?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Handle subject change: reset selected topics
   const handleSelectSubject = (subjectId: string) => {
     setSelectedSubjectId(subjectId);
@@ -188,6 +225,9 @@ export function LearnPage() {
     setSelectedWordBankToken(null);
     setWordBankChecked(false);
     setError(null);
+    setSessionId('');
+    hasPersistedResultsRef.current = false;
+    persistedTaskIdsRef.current.clear();
   };
 
   const toggleTopic = (topicId: string) => {
@@ -240,6 +280,10 @@ export function LearnPage() {
       return;
     }
 
+    const newSessionId = safeUUID();
+    setSessionId(newSessionId);
+    hasPersistedResultsRef.current = false;
+    persistedTaskIdsRef.current.clear();
     setIsGenerating(true);
     setError(null);
     setCompletedTasks([]);
@@ -355,6 +399,7 @@ export function LearnPage() {
       answeredAt: new Date().toISOString(),
     };
     setCompletedTasks((prev) => [...prev, completedRecord]);
+    void persistSingleTask(completedRecord);
   };
 
   const handleFlipFlashcard = () => {
@@ -368,6 +413,7 @@ export function LearnPage() {
         completedAt: new Date().toISOString(),
       };
       setCompletedTasks((prev) => [...prev, completedRecord]);
+      void persistSingleTask(completedRecord);
     }
   };
 
@@ -389,6 +435,7 @@ export function LearnPage() {
       completedAt: new Date().toISOString(),
     };
     setCompletedTasks((prev) => [...prev, completedRecord]);
+    void persistSingleTask(completedRecord);
   };
 
   const handleSelectMatchingLeft = (pairId: string) => {
@@ -422,6 +469,7 @@ export function LearnPage() {
           completedAt: new Date().toISOString(),
         };
         setCompletedTasks((prev) => [...prev, completedRecord]);
+        void persistSingleTask(completedRecord);
       }
     } else {
       // Incorrect Match
@@ -478,6 +526,7 @@ export function LearnPage() {
   const handleCheckWordBank = () => {
     if (!currentTask || currentTask.mode !== 'word-bank') return;
     setWordBankChecked(true);
+    setIsAnswerRevealed(true); // always reveal so user can see correct answers and move on
 
     let correctBlanksCount = 0;
     for (const blank of currentTask.blanks) {
@@ -488,26 +537,99 @@ export function LearnPage() {
     }
 
     const isFullyCorrect = correctBlanksCount === currentTask.blanks.length;
-    if (isFullyCorrect) {
-      setIsAnswerRevealed(true);
-      const completedRecord: CompletedWordBankTask = {
-        task: currentTask,
-        userPlacements: { ...wordBankPlacements },
-        correctBlanksCount,
-        totalBlanksCount: currentTask.blanks.length,
-        isFullyCorrect: true,
-        completedAt: new Date().toISOString(),
-      };
-      setCompletedTasks((prev) => [...prev, completedRecord]);
+    const completedRecord: CompletedWordBankTask = {
+      task: currentTask,
+      userPlacements: { ...wordBankPlacements },
+      correctBlanksCount,
+      totalBlanksCount: currentTask.blanks.length,
+      isFullyCorrect,
+      completedAt: new Date().toISOString(),
+    };
+    setCompletedTasks((prev) => [...prev, completedRecord]);
+    void persistSingleTask(completedRecord);
+  };
+
+  const persistSingleTask = async (c: CompletedTask) => {
+    if (!user || persistedTaskIdsRef.current.has(c.task.id)) return;
+    persistedTaskIdsRef.current.add(c.task.id);
+
+    try {
+      const task = c.task;
+      let exerciseType: ExerciseType = 'quiz';
+      let isCorrect = false;
+
+      if (!('mode' in task) || task.mode === 'quiz') {
+        exerciseType = 'quiz';
+        isCorrect = (c as CompletedQuizTask).isCorrect;
+      } else if (task.mode === 'flashcards') {
+        exerciseType = 'flashcard';
+        isCorrect = true;
+      } else if (task.mode === 'fill-in-the-blank') {
+        exerciseType = 'fill_in_blank';
+        isCorrect = (c as CompletedFillInBlankTask).isCorrect;
+      } else if (task.mode === 'matching') {
+        exerciseType = 'matching';
+        isCorrect = true;
+      } else if (task.mode === 'word-bank') {
+        exerciseType = 'word_bank';
+        isCorrect = (c as CompletedWordBankTask).isFullyCorrect;
+      }
+
+      const validTopicId =
+        task.topicId && knowledgeContext?.topicIds.includes(task.topicId)
+          ? task.topicId
+          : (knowledgeContext?.topicIds[0] ?? selectedTopicIds[0] ?? '');
+
+      const validSubjectId = selectedSubjectId || (subjects[0]?.id ?? '');
+
+      if (!validTopicId || !validSubjectId) {
+        console.warn('Lernfortschritt kann nicht gespeichert werden: fehlende topicId oder subjectId', {
+          validTopicId,
+          validSubjectId,
+        });
+        return;
+      }
+
+      const completedAt =
+        'answeredAt' in c
+          ? c.answeredAt
+          : 'completedAt' in c
+            ? c.completedAt
+            : new Date().toISOString();
+
+      await recordLearningResults(user.id, [
+        {
+          subjectId: validSubjectId,
+          topicId: validTopicId,
+          sessionId: sessionId || null,
+          exerciseType,
+          isCorrect,
+          completedAt,
+        },
+      ]);
+    } catch (err) {
+      console.error('Lernfortschritt konnte nicht gespeichert werden:', err);
+      // Remove from persisted set so retry on next opportunity
+      persistedTaskIdsRef.current.delete(c.task.id);
     }
   };
 
+  const persistCompletedTasks = async (tasksToPersist: CompletedTask[]) => {
+    if (!user || tasksToPersist.length === 0) return;
+    const unpersisted = tasksToPersist.filter((c) => !persistedTaskIdsRef.current.has(c.task.id));
+    if (unpersisted.length === 0) return;
+
+    for (const task of unpersisted) {
+      await persistSingleTask(task);
+    }
+  };
 
   const handleNextTask = async () => {
     if (!knowledgeContext) return;
 
     if (completedTasks.length >= SESSION_QUESTION_LIMIT) {
       setIsSessionComplete(true);
+      void persistCompletedTasks(completedTasks);
       return;
     }
 
@@ -1236,6 +1358,10 @@ export function LearnPage() {
                       ? `Du hast ${wordBankSummary?.correctBlanks ?? 0} von ${wordBankSummary?.totalBlanks ?? 0} Lücken in ${completedTasks.length} Aufgaben richtig ausgefüllt.`
                       : `Du hast ${quizSummary?.correctCount ?? 0} von ${quizSummary?.totalQuestions ?? 0} Fragen richtig beantwortet.`}
             </p>
+            <div className="inline-flex items-center gap-2 text-xs font-medium text-slate-600 bg-slate-50 border border-slate-200/80 rounded-lg py-1.5 px-3 mx-auto mt-2">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <span>Dein Lernfortschritt wurde aktualisiert.</span>
+            </div>
           </div>
 
           <div className="p-3.5 sm:p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-3">
@@ -1700,13 +1826,6 @@ export function LearnPage() {
 
           {/* Zuordnen (Matching) Task View */}
           {selectedMode === 'matching' && currentTask.mode === 'matching' && (() => {
-            // Shuffle right items deterministically based on task id so it stays stable during matches
-            const shuffledRightPairs = [...currentTask.pairs].sort((a, b) => {
-              const hashA = (a.id + currentTask.id).split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
-              const hashB = (b.id + currentTask.id).split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
-              return hashA - hashB;
-            });
-
             const isAllMatched = matchedPairIds.length === currentTask.pairs.length;
 
             return (
@@ -1903,7 +2022,14 @@ export function LearnPage() {
                   </span>
                   <span className="text-xs text-slate-400">
                     {isAnswerRevealed
-                      ? '✓ Alle Lücken richtig ausgefüllt'
+                      ? (() => {
+                          const correctCount = currentTask.blanks.filter((b) =>
+                            checkWordBankAnswer(wordBankPlacements[b.id] || '', b.answer),
+                          ).length;
+                          return correctCount === totalBlanks
+                            ? '✓ Alle Lücken richtig ausgefüllt'
+                            : `${correctCount} von ${totalBlanks} richtig`;
+                        })()
                       : wordBankChecked
                         ? 'Korrigiere noch fehlerhafte Lücken'
                         : isAllFilled
@@ -2078,54 +2204,74 @@ export function LearnPage() {
                   </div>
                 ) : (
                   /* Completion & Next Task View */
-                  <div className="pt-4 border-t border-slate-100 space-y-4">
-                    <div className="p-3.5 sm:p-4 rounded-xl bg-emerald-50/80 border border-emerald-200/90 flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-2.5">
-                        <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-                        <div>
-                          <p className="text-sm font-semibold text-emerald-950">
-                            Alles richtig ausgefüllt!
-                          </p>
-                          <p className="text-xs text-emerald-800 mt-0.5">
-                            Alle {totalBlanks} Lücken wurden korrekt mit den Begriffen belegt.
-                          </p>
+                  (() => {
+                    const revealedCorrectCount = currentTask.blanks.filter((b) =>
+                      checkWordBankAnswer(wordBankPlacements[b.id] || '', b.answer),
+                    ).length;
+                    const isFullyCorrect = revealedCorrectCount === totalBlanks;
+                    return (
+                      <div className="pt-4 border-t border-slate-100 space-y-4">
+                        {isFullyCorrect ? (
+                          <div className="p-3.5 sm:p-4 rounded-xl bg-emerald-50/80 border border-emerald-200/90 flex items-center gap-2.5">
+                            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                            <div>
+                              <p className="text-sm font-semibold text-emerald-950">
+                                Alles richtig ausgefüllt!
+                              </p>
+                              <p className="text-xs text-emerald-800 mt-0.5">
+                                Alle {totalBlanks} Lücken wurden korrekt mit den Begriffen belegt.
+                              </p>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="p-3.5 sm:p-4 rounded-xl bg-amber-50/80 border border-amber-200/90 flex items-center gap-2.5">
+                            <XCircle className="w-5 h-5 text-amber-600 shrink-0" />
+                            <div>
+                              <p className="text-sm font-semibold text-amber-950">
+                                Einige Lücken sind noch fehlerhaft
+                              </p>
+                              <p className="text-xs text-amber-800 mt-0.5">
+                                {revealedCorrectCount} von {totalBlanks} Lücken richtig. Die richtigen Antworten sind unten aufgeführt.
+                              </p>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Evidence / correct-answer reference */}
+                        <div className="space-y-2">
+                          <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                            {isFullyCorrect ? 'Belege aus den Quellen:' : 'Richtige Antworten:'}
+                          </div>
+                          <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                            {currentTask.blanks.map((b) => (
+                              <div
+                                key={`ev-${b.id}`}
+                                className="p-2.5 rounded-lg bg-slate-50 border border-slate-200/70 text-xs text-slate-700 leading-relaxed"
+                              >
+                                <span className="font-semibold text-slate-900">{b.answer}:</span>{' '}
+                                „{b.evidence}"
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="flex justify-end pt-2">
+                          <button
+                            type="button"
+                            onClick={handleNextTask}
+                            className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-sm font-medium rounded-xl shadow-xs transition-[background-color,transform] duration-150 cursor-pointer active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+                          >
+                            <span>
+                              {completedTasks.length >= SESSION_QUESTION_LIMIT
+                                ? 'Ergebnis ansehen'
+                                : 'Nächste Aufgabe'}
+                            </span>
+                            <ArrowRight className="w-4 h-4" />
+                          </button>
                         </div>
                       </div>
-                    </div>
-
-                    {/* Evidence Quotes list for learning reinforcement */}
-                    <div className="space-y-2">
-                      <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                        Belege aus den Quellen:
-                      </div>
-                      <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                        {currentTask.blanks.map((b) => (
-                          <div
-                            key={`ev-${b.id}`}
-                            className="p-2.5 rounded-lg bg-slate-50 border border-slate-200/70 text-xs text-slate-700 leading-relaxed"
-                          >
-                            <span className="font-semibold text-slate-900">{b.answer}:</span>{' '}
-                            „{b.evidence}“
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="flex justify-end pt-2">
-                      <button
-                        type="button"
-                        onClick={handleNextTask}
-                        className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-sm font-medium rounded-xl shadow-xs transition-[background-color,transform] duration-150 cursor-pointer active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
-                      >
-                        <span>
-                          {completedTasks.length >= SESSION_QUESTION_LIMIT
-                            ? 'Ergebnis ansehen'
-                            : 'Nächste Aufgabe'}
-                        </span>
-                        <ArrowRight className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
+                    );
+                  })()
                 )}
               </div>
             );

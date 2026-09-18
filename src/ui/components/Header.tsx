@@ -4,6 +4,8 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../infrastructure/auth/AuthContext';
 import { cn } from '../../shared/utils/cn';
 
+import logoUrl from '../../assets/logo.png';
+
 interface HeaderProps {
   onOpenMobileMenu?: () => void;
 }
@@ -34,10 +36,9 @@ export function Header({ onOpenMobileMenu }: HeaderProps) {
         )}
         <Link
           to="/"
-          className="hidden sm:flex items-center gap-2 text-slate-900 hover:opacity-90 transition-opacity shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 rounded-sm"
+          className="hidden sm:flex items-center text-slate-900 hover:opacity-90 transition-opacity shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 rounded-sm"
         >
-          <BookOpen className="w-5 h-5 text-blue-600 shrink-0" />
-          <span className="font-semibold text-sm whitespace-nowrap">Meine Schule</span>
+          <img src={logoUrl} alt="Materia" className="h-6.5 w-auto object-contain" />
         </Link>
       </div>
       <div className="flex items-center gap-3">
@@ -55,9 +56,14 @@ export function Header({ onOpenMobileMenu }: HeaderProps) {
         </Link>
         <div className="h-4 w-px bg-slate-200" />
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-xs font-medium text-slate-600 select-none" title={user?.email || 'User'}>
+          <Link
+            to="/profile"
+            className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 border border-slate-200 flex items-center justify-center text-xs font-medium text-slate-700 select-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+            title={`Profil & Lernstatistik (${user?.email || 'User'})`}
+            aria-label="Profil & Lernstatistik öffnen"
+          >
             {initials}
-          </div>
+          </Link>
           <button
             onClick={logOut}
             className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md transition-[background-color,color,transform] duration-150 active:scale-95 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Settings, Trash2, Edit2, Loader2, Book, Folder, Plus } from 'lucide-react';
+import { Settings, Trash2, Edit2, Loader2, Book, Folder, Plus, GraduationCap } from 'lucide-react';
 import { useAuth } from '../../infrastructure/auth/AuthContext';
 import {
   Subject,
@@ -10,6 +10,9 @@ import {
   notifySubjectsChanged,
 } from '../../application/use-cases/subjects';
 import { Topic, getTopicsForSubject, createTopic, updateTopic, deleteTopic } from '../../application/use-cases/topics';
+import { useLearningProgress } from '../hooks/useLearningProgress';
+import { formatLearningStateLabel } from '../../application/use-cases/learning/learningProgress';
+import { cn } from '../../shared/utils/cn';
 import { Button } from '../components/Button';
 import { NameDialog } from '../components/NameDialog';
 import { DeleteDialog } from '../components/DeleteDialog';
@@ -30,6 +33,9 @@ export function SubjectPage() {
   const [isAddTopicDialogOpen, setIsAddTopicDialogOpen] = useState(false);
   const [editingTopic, setEditingTopic] = useState<Topic | null>(null);
   const [deletingTopic, setDeletingTopic] = useState<Topic | null>(null);
+
+  const { getTopicProgress, getSubjectProgress } = useLearningProgress(user?.id);
+  const subjectProgress = subject ? getSubjectProgress(subject.id, topics.map(t => t.id)) : null;
 
   const loadData = async () => {
     if (!user || !subjectId || isAuthLoading) return;
@@ -134,13 +140,42 @@ export function SubjectPage() {
           </div>
           <div className="min-w-0">
             <h1 className="text-xl sm:text-2xl font-semibold text-slate-900 truncate leading-snug">{subject.name}</h1>
-            <p className="text-xs text-slate-500 mt-0.5">
-              {topics.length === 1 ? '1 Thema' : `${topics.length} Themen`} in diesem Fach
-            </p>
+            <div className="flex flex-wrap items-center gap-2 mt-0.5">
+              <p className="text-xs text-slate-500">
+                {topics.length === 1 ? '1 Thema' : `${topics.length} Themen`} in diesem Fach
+              </p>
+              {subjectProgress && subjectProgress.completedExercises > 0 && (
+                <>
+                  <span className="text-slate-300 text-xs">·</span>
+                  <span className="text-xs text-slate-600 font-medium">
+                    {subjectProgress.completedExercises} Übungen ({subjectProgress.accuracyPercentage}%)
+                  </span>
+                  <span
+                    className={cn(
+                      'text-[10px] font-medium px-1.5 py-0.5 rounded border',
+                      subjectProgress.learningState === 'sicher'
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : subjectProgress.learningState === 'ueben'
+                          ? 'bg-amber-50 text-amber-700 border-amber-200'
+                          : 'bg-rose-50 text-rose-700 border-rose-200',
+                    )}
+                  >
+                    {formatLearningStateLabel(subjectProgress.learningState)}
+                  </span>
+                </>
+              )}
+            </div>
           </div>
         </div>
         
         <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+          <Link
+            to={`/learn?subjectId=${subject.id}`}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/80 rounded-lg text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+          >
+            <GraduationCap className="w-3.5 h-3.5" />
+            <span>Fach üben</span>
+          </Link>
           <Button variant="secondary" onClick={() => setIsEditDialogOpen(true)} className="gap-2">
             <Edit2 className="w-4 h-4" />
             <span>Umbenennen</span>
@@ -176,7 +211,9 @@ export function SubjectPage() {
           </div>
         ) : (
           <div className="grid gap-2.5">
-            {topics.map((topic) => (
+            {topics.map((topic) => {
+              const topicProg = getTopicProgress(topic.id);
+              return (
               <div 
                 key={topic.id}
                 className="group relative flex items-center justify-between p-3.5 sm:p-4 bg-white border border-slate-200/90 rounded-lg shadow-2xs hover:border-slate-300 hover:shadow-xs transition-[border-color,box-shadow] duration-150 gap-3 w-full min-w-0 max-w-full overflow-hidden"
@@ -190,12 +227,40 @@ export function SubjectPage() {
                     <Folder className="w-5 h-5" />
                   </div>
                   <div className="min-w-0 flex-1 overflow-hidden">
-                    <span className="font-semibold text-slate-900 group-hover:text-blue-600 transition-colors duration-150 truncate block text-sm sm:text-[15px] leading-snug">
-                      {topic.name}
-                    </span>
-                    <span className="text-xs text-slate-400 mt-0.5 block truncate">
-                      Thema öffnen & Unterlagen ansehen
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-slate-900 group-hover:text-blue-600 transition-colors duration-150 truncate block text-sm sm:text-[15px] leading-snug">
+                        {topic.name}
+                      </span>
+                      {topicProg && (
+                        <span
+                          className={cn(
+                            'text-[10px] sm:text-[11px] font-medium px-1.5 py-0.5 rounded border shrink-0',
+                            topicProg.learningState === 'sicher'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : topicProg.learningState === 'ueben'
+                                ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                : topicProg.learningState === 'wiederholen'
+                                  ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                  : 'bg-slate-50 text-slate-500 border-slate-200',
+                          )}
+                        >
+                          {formatLearningStateLabel(topicProg.learningState)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-xs text-slate-400 block truncate">
+                        Thema öffnen & Unterlagen ansehen
+                      </span>
+                      {topicProg && topicProg.completedExercises > 0 && (
+                        <>
+                          <span className="text-slate-300 text-xs hidden sm:inline">·</span>
+                          <span className="text-xs text-slate-500 hidden sm:inline truncate">
+                            {topicProg.completedExercises} Übungen ({topicProg.accuracyPercentage}%)
+                          </span>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </Link>
                 
@@ -227,7 +292,8 @@ export function SubjectPage() {
                   </button>
                 </div>
               </div>
-            ))}
+            );
+          })}
           </div>
         )}
       </div>

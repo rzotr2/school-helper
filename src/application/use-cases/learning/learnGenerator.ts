@@ -56,6 +56,7 @@ export function validateQuizTask(
   allowedSourceIds: Set<string>,
   fallbackTopicId: string,
   difficulty: LearningDifficulty = 'mittel',
+  allowedTopicIds?: Set<string>,
 ): QuizTask | null {
   if (typeof raw !== 'object' || raw === null) return null;
 
@@ -113,10 +114,15 @@ export function validateQuizTask(
     [shuffledOptions[i], shuffledOptions[j]] = [shuffledOptions[j], shuffledOptions[i]];
   }
 
-  const topicId =
+  const rawTopicId =
     typeof data.topicId === 'string' && data.topicId.trim()
       ? data.topicId.trim()
       : fallbackTopicId;
+
+  const topicId =
+    allowedTopicIds && allowedTopicIds.size > 0 && !allowedTopicIds.has(rawTopicId)
+      ? fallbackTopicId
+      : rawTopicId;
 
   return {
     id: typeof data.id === 'string' && data.id ? data.id : `task-${Date.now()}`,
@@ -649,6 +655,12 @@ export function validateWordBankTask(
     return null;
   }
 
+  // Fisher-Yates shuffle so the answer words are not always first in the bank
+  for (let i = validatedWords.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [validatedWords[i], validatedWords[j]] = [validatedWords[j], validatedWords[i]];
+  }
+
   return {
     id: typeof data.id === 'string' && data.id ? data.id : `wordbank-${Date.now()}`,
     mode: 'word-bank',
@@ -725,7 +737,7 @@ export async function generateQuizTask(
     schwer: 'Fokus auf Abgrenzungen, Unterschiede und detaillierte Kriterien ("Was unterscheidet X von Y?").',
   }[difficulty];
 
-  const systemPrompt = `You are an educational task generator for School Helper.
+  const systemPrompt = `You are an educational task generator for Materia.
 Your sole job is to create a multiple-choice Quiz question for a student strictly from the provided source material.
 
 CRITICAL ARCHITECTURAL RULES:
@@ -800,7 +812,8 @@ ${formattedSources}`;
     throw new Error('Ungültiges JSON-Format von DeepSeek empfangen');
   }
 
-  const task = validateQuizTask(parsed, allowedSourceIds, activeTopicId, difficulty);
+  const allowedTopicIds = new Set(context.topicIds);
+  const task = validateQuizTask(parsed, allowedSourceIds, activeTopicId, difficulty, allowedTopicIds);
   if (!task) {
     throw new Error(
       'Die erstellte Aufgabe konnte nicht anhand der verifizierten Quellen validiert werden (Halluzinations-Schutz).',
@@ -873,7 +886,7 @@ export async function generateFlashcardTask(
     schwer: 'Fokus auf Abgrenzungen, Kriterien, Vor- und Nachteile ("Was unterscheidet X von Y? / Wann setzt man X ein?").',
   }[difficulty];
 
-  const systemPrompt = `You are an educational task generator for School Helper.
+  const systemPrompt = `You are an educational task generator for Materia.
 Your sole job is to create a study flashcard (Karteikarte) for a student strictly from the provided source material.
 
 CRITICAL ARCHITECTURAL RULES:
@@ -1027,7 +1040,7 @@ export async function generateFillInBlankTask(
       'Wähle ein technisches Detail, einen Unterscheidungsbegriff oder eine spezifische Bedingung als Lücke. Vermeide Mehrdeutigkeiten.',
   }[difficulty];
 
-  const systemPrompt = `You are an educational task generator for School Helper.
+  const systemPrompt = `You are an educational task generator for Materia.
 Your sole job is to create a fill-in-the-blank (Lückentext) study task for a student strictly from the provided source material.
 
 CRITICAL ARCHITECTURAL RULES:
@@ -1183,7 +1196,7 @@ export async function generateMatchingTask(
       'Erstelle 5 bis 6 anspruchsvolle Paare mit subtileren Unterscheidungsmerkmalen (z.B. Maßnahme → spezifisches Risiko, Abgrenzungen ähnlicher Konzepte).',
   }[difficulty];
 
-  const systemPrompt = `You are an educational task generator for School Helper.
+  const systemPrompt = `You are an educational task generator for Materia.
 Your sole job is to create a Matching (Zuordnen) study exercise for a student strictly from the provided source material.
 
 CRITICAL ARCHITECTURAL RULES:
@@ -1361,7 +1374,7 @@ export async function generateWordBankTask(
       'Erstelle einen anspruchsvollen Fachtext mit 4 Lücken für spezifische Mechanismen, Kriterien oder Fachtermini. Die Wortbank soll 6 bis 7 Wörter umfassen (4 Antworten + 2-3 trennscharfe Distraktoren aus den Quellen).',
   }[difficulty];
 
-  const systemPrompt = `You are an educational task generator for School Helper.
+  const systemPrompt = `You are an educational task generator for Materia.
 Your sole job is to create a Wortbank / Lückentext mit Wörtern (Word Bank) study task for a student strictly from the provided source material.
 
 CRITICAL ARCHITECTURAL RULES:

@@ -1,4 +1,4 @@
-# School Helper
+# Materia
 
 A personal digital school workspace for Berufsschule students. Organize school materials in one place — the UI is German.
 

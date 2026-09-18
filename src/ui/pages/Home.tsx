@@ -1,8 +1,10 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { FileText, Loader2, ExternalLink, Trash2, Search, AlertCircle, X, Edit2, FolderInput, RefreshCw, Sparkles, Upload } from 'lucide-react';
+import { useNavigate, Link } from 'react-router-dom';
+import { FileText, Loader2, ExternalLink, Trash2, Search, AlertCircle, X, Edit2, FolderInput, RefreshCw, Sparkles, Upload, GraduationCap, ArrowRight } from 'lucide-react';
 import { Button } from '../components/Button';
 import { useAuth } from '../../infrastructure/auth/AuthContext';
+import { useLearningProgress } from '../hooks/useLearningProgress';
+import { formatLearningStateLabel } from '../../application/use-cases/learning/learningProgress';
 import {
   Document,
   getAllDocuments,
@@ -122,6 +124,8 @@ export function Home() {
   const [topics, setTopics] = useState<Topic[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const { globalProgress, getSubjectProgress } = useLearningProgress(user?.id, { subjects, topics });
 
   // Full-text document search state
   const [fullTextQuery, setFullTextQuery] = useState('');
@@ -638,6 +642,88 @@ export function Home() {
         </div>
       ) : (
         <>
+          {/* Compact Lernfortschritt Section */}
+          {subjects.length > 0 && (
+            <div className="bg-white border border-slate-200/90 rounded-xl p-4 sm:p-5 shadow-2xs space-y-3.5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100">
+                    <GraduationCap className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <h2 className="text-sm font-semibold text-slate-900 leading-snug">Lernfortschritt</h2>
+                    <p className="text-xs text-slate-500">
+                      {globalProgress.totalExercises > 0
+                        ? `${globalProgress.totalExercises} Übungen absolviert · ${globalProgress.accuracyPercentage}% Trefferquote · ${globalProgress.topicsLearnedCount} von ${globalProgress.totalTopicsCount} Themen gelernt`
+                        : 'Noch keine Übungen absolviert'}
+                    </p>
+                  </div>
+                </div>
+                <Link
+                  to="/profile"
+                  className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors self-start sm:self-center"
+                >
+                  <span>Lernstatistik ansehen</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                {subjects.slice(0, 6).map((sub) => {
+                  const prog = getSubjectProgress(sub.id);
+                  const hasActivity = prog.completedExercises > 0;
+                  return (
+                    <button
+                      key={sub.id}
+                      type="button"
+                      onClick={() => navigate(`/subject/${sub.id}`)}
+                      className="p-3 text-left rounded-lg bg-slate-50/70 hover:bg-slate-100/80 border border-slate-200/70 transition-colors cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+                    >
+                      <div className="flex items-center justify-between gap-2 mb-1.5">
+                        <span className="font-medium text-xs text-slate-900 truncate group-hover:text-blue-600 transition-colors">
+                          {sub.name}
+                        </span>
+                        <span
+                          className={cn(
+                            'text-[10px] font-medium px-1.5 py-0.5 rounded border shrink-0',
+                            prog.learningState === 'sicher'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : prog.learningState === 'ueben'
+                                ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                : prog.learningState === 'wiederholen'
+                                  ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                  : 'bg-white text-slate-500 border-slate-200',
+                          )}
+                        >
+                          {formatLearningStateLabel(prog.learningState)}
+                        </span>
+                      </div>
+                      <div className="h-1 bg-slate-200/80 rounded-full overflow-hidden mb-1.5">
+                        <div
+                          className={cn(
+                            'h-full rounded-full transition-all duration-300',
+                            prog.learningState === 'sicher'
+                              ? 'bg-emerald-500'
+                              : prog.learningState === 'ueben'
+                                ? 'bg-amber-500'
+                                : prog.learningState === 'wiederholen'
+                                  ? 'bg-rose-500'
+                                  : 'bg-slate-300',
+                          )}
+                          style={{ width: hasActivity ? `${prog.accuracyPercentage}%` : '0%' }}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] text-slate-400">
+                        <span>{hasActivity ? `${prog.completedExercises} Übungen (${prog.accuracyPercentage}%)` : '0 Übungen'}</span>
+                        <span>{prog.topicsLearnedCount}/{prog.totalTopicsCount} Themen</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Global Filter Bar */}
           {documents.length > 0 && (
             <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2.5 sm:gap-3 bg-white p-2.5 sm:p-3 border border-slate-200/90 rounded-lg shadow-2xs">
