@@ -64,7 +64,7 @@ export function NameDialog({
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+            className="w-full px-3 py-2 text-sm bg-white border border-slate-200/90 rounded-lg shadow-2xs focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 text-slate-900 placeholder:text-slate-400 transition-[border-color,box-shadow] duration-150"
             placeholder={placeholder}
             disabled={isSubmitting}
             maxLength={maxLength}

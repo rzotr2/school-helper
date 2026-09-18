@@ -1,5 +1,16 @@
 @import "tailwindcss";
 
+@layer base {
+  :root {
+    --ease-micro: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-surface: cubic-bezier(0.2, 0, 0, 1);
+    --ease-out-smooth: cubic-bezier(0.16, 1, 0.3, 1);
+    --duration-micro: 140ms;
+    --duration-normal: 200ms;
+    --duration-surface: 260ms;
+  }
+}
+
 .perspective-1000 {
   perspective: 1000px;
 }
@@ -35,10 +46,47 @@
   }
 }
 
+@keyframes modalScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 .animate-drawer-slide {
-  animation: slideInFromLeft 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: slideInFromLeft 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .animate-backdrop-fade {
-  animation: fadeIn 0.2s ease-out forwards;
+  animation: fadeIn 0.18s ease-out forwards;
+}
+
+.animate-modal-in {
+  animation: modalScaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Reduced Motion: Substantially reduce motion across the app */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .preserve-3d {
+    transform-style: flat !important;
+  }
+
+  .animate-drawer-slide,
+  .animate-backdrop-fade,
+  .animate-modal-in {
+    animation: none !important;
+  }
 }

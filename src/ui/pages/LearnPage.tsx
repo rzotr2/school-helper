@@ -537,20 +537,24 @@ export function LearnPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-5">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900 flex items-center gap-2">
-            <GraduationCap className="w-6 h-6 text-blue-600" />
-            <span>Lernen</span>
-          </h1>
-          <p className="text-sm text-slate-500">
-            Quellenbasierte Lernaufgaben auf Basis deiner Schulunterlagen und verifizierter Webinhalte.
-          </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200/80 pb-5">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 bg-blue-50/90 text-blue-600 border border-blue-100/80 rounded-lg flex items-center justify-center shrink-0">
+            <GraduationCap className="w-5 h-5" />
+          </div>
+          <div>
+            <h1 className="text-xl sm:text-2xl font-semibold text-slate-900">
+              Lernen
+            </h1>
+            <p className="text-sm text-slate-500 mt-0.5">
+              Quellenbasierte Lernaufgaben auf Basis deiner Schulunterlagen und verifizierter Webinhalte.
+            </p>
+          </div>
         </div>
       </div>
 
       {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 flex items-start gap-3">
+        <div className="p-4 bg-red-50/80 border border-red-200/90 rounded-xl text-sm text-red-700 flex items-start gap-3">
           <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
           <div className="space-y-1">
             <p className="font-medium text-red-800">Hinweis</p>
@@ -561,7 +565,7 @@ export function LearnPage() {
 
       {/* Configuration Section (when no active task and session not finished) */}
       {!currentTask && !isGenerating && !isSessionComplete && (
-        <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-6 shadow-2xs space-y-6">
+        <div className="bg-white border border-slate-200/90 rounded-xl p-4 sm:p-6 shadow-2xs space-y-6">
           {/* Step 1: Select Subject */}
           <div className="space-y-2">
             <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
@@ -577,9 +581,9 @@ export function LearnPage() {
                     key={s.id}
                     onClick={() => handleSelectSubject(s.id)}
                     className={cn(
-                      'flex-grow sm:flex-initial min-w-[120px] text-center justify-center px-3.5 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer border',
+                      'flex-grow sm:flex-initial min-w-[120px] text-center justify-center px-3.5 py-2 rounded-lg text-sm font-medium transition-[background-color,border-color,box-shadow,color,transform] duration-150 active:scale-[0.98] cursor-pointer border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
                       selectedSubjectId === s.id
-                        ? 'bg-blue-50 border-blue-300 text-blue-800 shadow-2xs'
+                        ? 'bg-blue-50 border-blue-300 text-blue-800 shadow-2xs font-semibold'
                         : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50',
                     )}
                   >
@@ -611,7 +615,7 @@ export function LearnPage() {
                         setSelectedTopicIds(selectableTopics.map((t) => t.id));
                       }
                     }}
-                    className="text-xs text-blue-600 hover:text-blue-800 font-medium cursor-pointer self-start sm:self-auto"
+                    className="text-xs text-blue-600 hover:text-blue-800 font-medium cursor-pointer self-start sm:self-auto transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 rounded px-1"
                   >
                     {selectableTopics.every((t) => selectedTopicIds.includes(t.id))
                       ? 'Auswahl aufheben'
@@ -648,15 +652,15 @@ export function LearnPage() {
                               : undefined
                           }
                           className={cn(
-                            'flex-grow sm:flex-initial min-w-[140px] justify-between sm:justify-start px-3 py-2 rounded-lg text-xs font-medium transition-all border flex items-center gap-2',
+                            'flex-grow sm:flex-initial min-w-[140px] justify-between sm:justify-start px-3 py-2 rounded-lg text-xs font-medium transition-[background-color,border-color,box-shadow,color,transform] duration-150 border flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 select-none',
                             !isSelectable &&
                               'opacity-45 bg-slate-100/80 border-slate-200 text-slate-400 cursor-not-allowed shadow-none',
                             isSelectable &&
                               isSelected &&
-                              'bg-slate-900 border-slate-900 text-white shadow-2xs cursor-pointer',
+                              'bg-slate-900 border-slate-900 text-white shadow-2xs cursor-pointer active:scale-[0.98]',
                             isSelectable &&
                               !isSelected &&
-                              'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 cursor-pointer',
+                              'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 cursor-pointer active:scale-[0.98]',
                           )}
                         >
                           <span className="truncate flex-1 min-w-0 text-left">{t.name}</span>
@@ -715,7 +719,7 @@ export function LearnPage() {
                       key={d}
                       onClick={() => setDifficulty(d)}
                       className={cn(
-                        'flex-1 sm:flex-initial text-center justify-center px-3.5 py-1.5 rounded-lg text-xs font-medium capitalize border transition-all cursor-pointer',
+                        'flex-1 sm:flex-initial text-center justify-center px-3.5 py-1.5 rounded-lg text-xs font-medium capitalize border transition-[background-color,border-color,box-shadow,color,transform] duration-150 cursor-pointer active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
                         difficulty === d
                           ? 'bg-blue-50 border-blue-300 text-blue-700 font-semibold'
                           : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50',
@@ -734,9 +738,10 @@ export function LearnPage() {
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <button
+                    type="button"
                     onClick={() => setSelectedMode('quiz')}
                     className={cn(
-                      'p-3.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between',
+                      'p-3.5 rounded-xl border text-left transition-[background-color,border-color,box-shadow,transform] duration-150 active:scale-[0.99] cursor-pointer flex flex-col justify-between focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
                       selectedMode === 'quiz'
                         ? 'border-blue-500 bg-blue-50/50 shadow-2xs'
                         : 'border-slate-200 bg-white hover:bg-slate-50',
@@ -748,16 +753,19 @@ export function LearnPage() {
                         Verifizierte Fragen mit 4 Antwortoptionen und Quellennachweis.
                       </p>
                     </div>
-                    <span className="text-[11px] font-semibold text-blue-600 mt-3 inline-block">
-                      Aktiv
-                    </span>
+                    {selectedMode === 'quiz' && (
+                      <span className="text-[11px] font-semibold text-blue-600 mt-3 inline-flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        Ausgewählt
+                      </span>
+                    )}
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setSelectedMode('flashcards')}
                     className={cn(
-                      'p-3.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between',
+                      'p-3.5 rounded-xl border text-left transition-[background-color,border-color,box-shadow,transform] duration-150 active:scale-[0.99] cursor-pointer flex flex-col justify-between focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
                       selectedMode === 'flashcards'
                         ? 'border-blue-500 bg-blue-50/50 shadow-2xs'
                         : 'border-slate-200 bg-white hover:bg-slate-50',
@@ -769,16 +777,19 @@ export function LearnPage() {
                         Kompakte Frage- und Antwortkarten aus denselben Quellen.
                       </p>
                     </div>
-                    <span className="text-[11px] font-semibold text-blue-600 mt-3 inline-block">
-                      {selectedMode === 'flashcards' ? 'Ausgewählt' : 'Aktiv'}
-                    </span>
+                    {selectedMode === 'flashcards' && (
+                      <span className="text-[11px] font-semibold text-blue-600 mt-3 inline-flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        Ausgewählt
+                      </span>
+                    )}
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setSelectedMode('fill-in-the-blank')}
                     className={cn(
-                      'p-3.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between',
+                      'p-3.5 rounded-xl border text-left transition-[background-color,border-color,box-shadow,transform] duration-150 active:scale-[0.99] cursor-pointer flex flex-col justify-between focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
                       selectedMode === 'fill-in-the-blank'
                         ? 'border-blue-500 bg-blue-50/50 shadow-2xs'
                         : 'border-slate-200 bg-white hover:bg-slate-50',
@@ -790,9 +801,12 @@ export function LearnPage() {
                         Wichtige Schlüsselbegriffe im Kontext ergänzen.
                       </p>
                     </div>
-                    <span className="text-[11px] font-semibold text-blue-600 mt-3 inline-block">
-                      {selectedMode === 'fill-in-the-blank' ? 'Ausgewählt' : 'Aktiv'}
-                    </span>
+                    {selectedMode === 'fill-in-the-blank' && (
+                      <span className="text-[11px] font-semibold text-blue-600 mt-3 inline-flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        Ausgewählt
+                      </span>
+                    )}
                   </button>
                 </div>
               </div>
@@ -812,7 +826,7 @@ export function LearnPage() {
                     (tId) => (topicDocumentCounts.get(tId)?.completed ?? 0) === 0,
                   )
                 }
-                className="inline-flex items-center justify-center w-full sm:w-auto gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl shadow-xs transition-colors cursor-pointer"
+                className="inline-flex items-center justify-center w-full sm:w-auto gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl shadow-xs transition-[background-color,transform] duration-150 cursor-pointer active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
               >
                 <span>
                   Lernsession starten ({SESSION_QUESTION_LIMIT}{' '}
@@ -827,7 +841,7 @@ export function LearnPage() {
 
       {/* Loading state during retrieval & generation */}
       {isGenerating && (
-        <div className="bg-white border border-slate-200 rounded-xl p-6 sm:p-8 text-center space-y-3">
+        <div className="bg-white border border-slate-200/90 rounded-xl p-6 sm:p-8 text-center space-y-3 shadow-2xs">
           <Loader2 className="w-8 h-8 text-blue-600 animate-spin mx-auto" />
           <h3 className="text-base font-semibold text-slate-900">
             Quellenbasiertes Lernen wird vorbereitet
@@ -838,11 +852,16 @@ export function LearnPage() {
 
       {/* Session Completed Summary Screen */}
       {isSessionComplete && (quizSummary || flashcardSummary || fillBlankSummary) && !isGenerating && (
-        <div className="bg-white border border-slate-200 rounded-xl p-5 sm:p-8 shadow-2xs space-y-6">
+        <div className="bg-white border border-slate-200/90 rounded-xl p-5 sm:p-8 shadow-2xs space-y-6">
           <div className="text-center space-y-2">
-            <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center mx-auto mb-2">
+            <div className={cn(
+              'w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-2',
+              selectedMode === 'flashcards'
+                ? 'bg-blue-50/90 text-blue-600 border border-blue-100/80'
+                : 'bg-amber-50/90 text-amber-600 border border-amber-100/80',
+            )}>
               {selectedMode === 'flashcards' ? (
-                <Sparkles className="w-6 h-6 text-blue-600" />
+                <Sparkles className="w-6 h-6" />
               ) : (
                 <Trophy className="w-6 h-6" />
               )}
@@ -911,14 +930,14 @@ export function LearnPage() {
           <div className="flex flex-wrap justify-center gap-3 pt-2">
             <button
               onClick={handleStartSession}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg shadow-xs transition-colors cursor-pointer"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-sm font-medium rounded-lg shadow-xs transition-[background-color,transform] duration-150 cursor-pointer active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
             >
               <RotateCcw className="w-4 h-4" />
               <span>Erneut spielen</span>
             </button>
             <button
               onClick={resetSession}
-              className="px-4 py-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 text-sm font-medium rounded-lg transition-colors cursor-pointer"
+              className="px-4 py-2 bg-white border border-slate-200/90 text-slate-700 hover:bg-slate-50 text-sm font-medium rounded-lg transition-[background-color,border-color,transform] duration-150 cursor-pointer active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
             >
               Andere Themen wählen
             </button>
@@ -929,38 +948,47 @@ export function LearnPage() {
       {/* Active Task UI (Quiz or Flashcard) */}
       {currentTask && !isGenerating && !isSessionComplete && (
         <div className="space-y-6">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                {selectedMode === 'flashcards'
-                  ? 'Karte'
-                  : selectedMode === 'fill-in-the-blank'
-                    ? 'Aufgabe'
-                    : 'Frage'}{' '}
-                {currentQuestionNumber} von {SESSION_QUESTION_LIMIT}
-              </span>
-              {currentTopicName && (
-                <span className="text-[11px] font-medium bg-slate-100 text-slate-700 px-2 py-0.5 rounded truncate max-w-[160px] sm:max-w-none">
-                  {currentTopicName}
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  {selectedMode === 'flashcards'
+                    ? 'Karte'
+                    : selectedMode === 'fill-in-the-blank'
+                      ? 'Aufgabe'
+                      : 'Frage'}{' '}
+                  {currentQuestionNumber} von {SESSION_QUESTION_LIMIT}
                 </span>
-              )}
-              {currentTask.difficulty && (
-                <span className="text-[11px] font-medium bg-blue-50 text-blue-700 px-2 py-0.5 rounded capitalize">
-                  {currentTask.difficulty}
-                </span>
-              )}
+                {currentTopicName && (
+                  <span className="text-[11px] font-medium bg-slate-100/80 text-slate-700 px-2 py-0.5 rounded border border-slate-200/60 truncate max-w-[160px] sm:max-w-none">
+                    {currentTopicName}
+                  </span>
+                )}
+                {currentTask.difficulty && (
+                  <span className="text-[11px] font-medium bg-blue-50/80 text-blue-700 px-2 py-0.5 rounded border border-blue-100/60 capitalize">
+                    {currentTask.difficulty}
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={resetSession}
+                className="text-xs text-slate-500 hover:text-slate-800 cursor-pointer transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 rounded px-1"
+              >
+                Session beenden
+              </button>
             </div>
-            <button
-              onClick={resetSession}
-              className="text-xs text-slate-500 hover:text-slate-800 cursor-pointer"
-            >
-              Session beenden
-            </button>
+            {/* Progress bar */}
+            <div className="h-1 bg-slate-100 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-blue-500 rounded-full transition-[width] duration-300 ease-out"
+                style={{ width: `${(currentQuestionNumber / SESSION_QUESTION_LIMIT) * 100}%` }}
+              />
+            </div>
           </div>
 
           {/* Quiz Task View */}
           {selectedMode === 'quiz' && 'options' in currentTask && (
-            <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-6 shadow-2xs space-y-6">
+            <div className="bg-white border border-slate-200/90 rounded-xl p-4 sm:p-6 shadow-2xs space-y-6">
               {/* Question */}
               <div className="space-y-2">
                 <h2 className="text-base sm:text-lg font-semibold text-slate-900 leading-snug">
@@ -993,9 +1021,9 @@ export function LearnPage() {
                       disabled={isAnswerRevealed}
                       onClick={() => handleSelectAnswerOption(option)}
                       className={cn(
-                        'w-full p-3.5 sm:p-4 rounded-xl border text-left text-sm transition-all cursor-pointer flex items-center justify-between gap-2.5',
+                        'w-full p-3.5 sm:p-4 rounded-xl border text-left text-sm transition-[background-color,border-color,box-shadow,color,transform] duration-150 flex items-center justify-between gap-2.5 select-none',
                         optionStyle,
-                        isAnswerRevealed && 'cursor-default',
+                        !isAnswerRevealed ? 'cursor-pointer active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40' : 'cursor-default',
                       )}
                     >
                       <span className="min-w-0 flex-1 break-words">{option}</span>
@@ -1030,7 +1058,7 @@ export function LearnPage() {
                   <div className="flex justify-end pt-2">
                     <button
                       onClick={handleNextTask}
-                      className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg shadow-xs transition-colors cursor-pointer"
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-sm font-medium rounded-lg shadow-xs transition-[background-color,transform] duration-150 cursor-pointer active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
                     >
                       <span>
                         {completedTasks.length >= SESSION_QUESTION_LIMIT
@@ -1051,7 +1079,7 @@ export function LearnPage() {
               <div className="relative w-full min-h-[380px] h-[380px] sm:h-[420px] perspective-1000">
                 <div
                   className={cn(
-                    'relative w-full h-full preserve-3d transition-transform duration-500 ease-in-out',
+                    'relative w-full h-full preserve-3d transition-transform duration-350 ease-out',
                     isAnswerRevealed && 'rotate-y-180',
                   )}
                 >
@@ -1068,7 +1096,15 @@ export function LearnPage() {
 
                     <div
                       onClick={handleFlipFlashcard}
-                      className="flex-1 flex items-center justify-center text-center px-2 sm:px-6 cursor-pointer overflow-y-auto"
+                      className="flex-1 flex items-center justify-center text-center px-2 sm:px-6 cursor-pointer overflow-y-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 rounded-lg"
+                      tabIndex={0}
+                      role="button"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          handleFlipFlashcard();
+                        }
+                      }}
                     >
                       <h2 className="text-lg sm:text-2xl font-semibold text-slate-900 leading-snug">
                         {currentTask.question}
@@ -1079,7 +1115,7 @@ export function LearnPage() {
                       <button
                         type="button"
                         onClick={handleFlipFlashcard}
-                        className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold rounded-xl transition-colors cursor-pointer border border-slate-200/80 active:scale-95"
+                        className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold rounded-xl transition-[background-color,transform] duration-150 cursor-pointer border border-slate-200/80 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
                       >
                         <RotateCcw className="w-4 h-4 text-slate-600" />
                         <span>Karte umdrehen</span>
@@ -1096,7 +1132,7 @@ export function LearnPage() {
                       <button
                         type="button"
                         onClick={handleFlipFlashcard}
-                        className="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1 cursor-pointer"
+                        className="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1 cursor-pointer transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 rounded px-1"
                       >
                         <RotateCcw className="w-3 h-3" />
                         <span>Zurück</span>
@@ -1140,7 +1176,7 @@ export function LearnPage() {
                       <button
                         type="button"
                         onClick={handleFlipFlashcard}
-                        className="inline-flex items-center gap-1.5 px-3 py-2 text-slate-600 hover:bg-slate-100 rounded-lg text-xs font-medium transition-colors cursor-pointer"
+                        className="inline-flex items-center gap-1.5 px-3 py-2 text-slate-600 hover:bg-slate-100 rounded-lg text-xs font-medium transition-[background-color,transform] duration-150 cursor-pointer active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
                       >
                         <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
                         <span>Vorderseite</span>
@@ -1149,7 +1185,7 @@ export function LearnPage() {
                       <button
                         type="button"
                         onClick={handleNextTask}
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg shadow-xs transition-colors cursor-pointer"
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-sm font-medium rounded-lg shadow-xs transition-[background-color,transform] duration-150 cursor-pointer active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
                       >
                         <span>
                           {completedTasks.length >= SESSION_QUESTION_LIMIT
@@ -1221,12 +1257,12 @@ export function LearnPage() {
                       onChange={(e) => setFillBlankInput(e.target.value)}
                       placeholder="Gesuchten Begriff eingeben…"
                       autoFocus
-                      className="flex-1 px-4 py-2.5 rounded-xl border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm font-medium bg-white text-slate-900 shadow-2xs"
+                      className="flex-1 px-4 py-2.5 rounded-xl border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm font-medium bg-white text-slate-900 shadow-2xs transition-[border-color,box-shadow] duration-150"
                     />
                     <button
                       type="submit"
                       disabled={!fillBlankInput.trim()}
-                      className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl shadow-xs transition-colors cursor-pointer shrink-0"
+                      className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl shadow-xs transition-[background-color,transform] duration-150 active:scale-95 cursor-pointer shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
                     >
                       Prüfen
                     </button>
@@ -1279,7 +1315,7 @@ export function LearnPage() {
                     <button
                       type="button"
                       onClick={handleNextTask}
-                      className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-xl shadow-xs transition-colors cursor-pointer"
+                      className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-sm font-medium rounded-xl shadow-xs transition-[background-color,transform] duration-150 cursor-pointer active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
                     >
                       <span>
                         {completedTasks.length >= SESSION_QUESTION_LIMIT
@@ -1296,7 +1332,7 @@ export function LearnPage() {
 
           {/* Sources Grounding Block (Mandatory) */}
           <div className={cn(
-            'bg-white border border-slate-200 rounded-xl p-4 sm:p-5 shadow-2xs space-y-3',
+            'bg-white border border-slate-200/90 rounded-xl p-4 sm:p-5 shadow-2xs space-y-3',
             (selectedMode === 'flashcards' || selectedMode === 'fill-in-the-blank') && 'max-w-2xl mx-auto w-full',
           )}>
             <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
@@ -1313,7 +1349,7 @@ export function LearnPage() {
                     return (
                       <div
                         key={src.id}
-                        className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-xs gap-1.5 sm:gap-2"
+                        className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 rounded-lg bg-slate-50/80 border border-slate-200/80 text-xs gap-1.5 sm:gap-2"
                       >
                         <div className="flex items-center gap-2 min-w-0">
                           <FileText className="w-4 h-4 text-blue-600 shrink-0" />
@@ -1336,7 +1372,7 @@ export function LearnPage() {
                   return (
                     <div
                       key={src.id}
-                      className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-xs gap-1.5 sm:gap-2"
+                      className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 rounded-lg bg-slate-50/80 border border-slate-200/80 text-xs gap-1.5 sm:gap-2"
                     >
                       <div className="flex items-center gap-2 min-w-0">
                         <Globe className="w-4 h-4 text-emerald-600 shrink-0" />
@@ -1355,7 +1391,7 @@ export function LearnPage() {
                             href={src.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 underline"
+                            className="inline-flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 underline transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 rounded"
                           >
                             <span>Öffnen</span>
                             <ExternalLink className="w-3 h-3" />

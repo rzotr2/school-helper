@@ -106,7 +106,7 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
             onClick={handleLinkClick}
             className={({ isActive }) =>
               cn(
-                "flex items-center gap-2 px-2 py-1.5 text-sm rounded-md transition-colors",
+                "flex items-center gap-2 px-2 py-1.5 text-sm rounded-md transition-[background-color,color] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40",
                 isActive ? "bg-blue-50 text-blue-700 font-medium" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
               )
             }
@@ -119,7 +119,7 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
             onClick={handleLinkClick}
             className={({ isActive }) =>
               cn(
-                "flex items-center gap-2 px-2 py-1.5 text-sm rounded-md transition-colors",
+                "flex items-center gap-2 px-2 py-1.5 text-sm rounded-md transition-[background-color,color] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40",
                 isActive ? "bg-blue-50 text-blue-700 font-medium" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
               )
             }
@@ -137,7 +137,7 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
           </h3>
           <button
             onClick={() => setIsAddDialogOpen(true)}
-            className="text-slate-400 hover:text-slate-600 transition-colors cursor-pointer p-1 rounded hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+            className="text-slate-400 hover:text-slate-600 transition-[background-color,color,transform] duration-150 active:scale-95 cursor-pointer p-1 rounded hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
             title="Fach hinzufügen"
             aria-label="Fach hinzufügen"
           >
@@ -161,7 +161,7 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
                 onClick={handleLinkClick}
                 className={({ isActive }) =>
                   cn(
-                    "flex items-center gap-2 px-2 py-1.5 text-sm rounded-md transition-colors",
+                    "flex items-center gap-2 px-2 py-1.5 text-sm rounded-md transition-[background-color,color] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40",
                     isActive ? "bg-blue-50 text-blue-700 font-medium" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                   )
                 }

@@ -530,10 +530,10 @@ export function PdfViewer({
             >
               <button
                 type="button"
-                className={`rounded px-2 py-1 text-xs cursor-pointer ${
+                className={`rounded px-2.5 py-1 text-xs cursor-pointer transition-[background-color,color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 select-none ${
                   state.textSource === 'native'
-                    ? 'bg-white font-medium text-slate-900 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700'
+                    ? 'bg-white font-medium text-slate-900 shadow-2xs'
+                    : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
                 }`}
                 aria-pressed={state.textSource === 'native'}
                 onClick={() => dispatch({ type: 'SET_TEXT_SOURCE', source: 'native' })}
@@ -542,10 +542,10 @@ export function PdfViewer({
               </button>
               <button
                 type="button"
-                className={`rounded px-2 py-1 text-xs cursor-pointer ${
+                className={`rounded px-2.5 py-1 text-xs cursor-pointer transition-[background-color,color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 select-none ${
                   state.textSource === 'ocr'
-                    ? 'bg-white font-medium text-slate-900 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700'
+                    ? 'bg-white font-medium text-slate-900 shadow-2xs'
+                    : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
                 }`}
                 aria-pressed={state.textSource === 'ocr'}
                 onClick={() => dispatch({ type: 'SET_TEXT_SOURCE', source: 'ocr' })}

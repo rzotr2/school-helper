@@ -25,7 +25,7 @@ export function Header({ onOpenMobileMenu }: HeaderProps) {
           <button
             type="button"
             onClick={onOpenMobileMenu}
-            className="md:hidden p-1.5 -ml-0.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-md transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+            className="md:hidden p-1.5 -ml-0.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-md transition-[background-color,color,transform] duration-150 active:scale-95 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
             title="Navigation öffnen"
             aria-label="Navigation öffnen"
           >
@@ -34,7 +34,7 @@ export function Header({ onOpenMobileMenu }: HeaderProps) {
         )}
         <Link
           to="/"
-          className="hidden sm:flex items-center gap-2 text-slate-900 hover:opacity-90 transition-opacity shrink-0"
+          className="hidden sm:flex items-center gap-2 text-slate-900 hover:opacity-90 transition-opacity shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 rounded-sm"
         >
           <BookOpen className="w-5 h-5 text-blue-600 shrink-0" />
           <span className="font-semibold text-sm whitespace-nowrap">Meine Schule</span>
@@ -44,9 +44,9 @@ export function Header({ onOpenMobileMenu }: HeaderProps) {
         <Link
           to="/learn"
           className={cn(
-            'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border',
+            'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-[background-color,border-color,color,transform] duration-150 border active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
             isLearnActive
-              ? 'bg-blue-50 border-blue-200 text-blue-700 font-semibold'
+              ? 'bg-blue-50 border-blue-200 text-blue-700 font-semibold shadow-2xs'
               : 'border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900',
           )}
         >
@@ -55,12 +55,12 @@ export function Header({ onOpenMobileMenu }: HeaderProps) {
         </Link>
         <div className="h-4 w-px bg-slate-200" />
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-xs font-medium text-slate-600" title={user?.email || 'User'}>
+          <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-xs font-medium text-slate-600 select-none" title={user?.email || 'User'}>
             {initials}
           </div>
           <button
             onClick={logOut}
-            className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+            className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md transition-[background-color,color,transform] duration-150 active:scale-95 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
             title="Abmelden"
             aria-label="Abmelden"
           >

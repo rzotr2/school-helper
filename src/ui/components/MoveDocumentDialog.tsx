@@ -86,7 +86,7 @@ export function MoveDocumentDialog({
             value={selectedTopicId}
             onChange={(e) => setSelectedTopicId(e.target.value)}
             disabled={isSubmitting || otherTopicsCount === 0}
-            className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-slate-900 text-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full px-3 py-2 border border-slate-200/90 rounded-lg shadow-2xs focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white text-slate-900 text-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-[border-color,box-shadow] duration-150"
           >
             <option value="">-- Thema auswählen --</option>
             {subjects.map(subject => {

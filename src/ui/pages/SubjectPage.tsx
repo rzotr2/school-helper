@@ -125,13 +125,19 @@ export function SubjectPage() {
   if (!subject) return null;
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-300">
+    <div className="space-y-6 animate-in fade-in duration-300">
+      {/* Subject Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 pb-5 gap-4">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center shrink-0">
+        <div className="flex items-center gap-3.5 min-w-0">
+          <div className="w-10 h-10 bg-blue-50/90 text-blue-600 border border-blue-100/80 rounded-lg flex items-center justify-center shrink-0">
             <Book className="w-5 h-5" />
           </div>
-          <h1 className="text-xl sm:text-2xl font-semibold text-slate-900 truncate">{subject.name}</h1>
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-semibold text-slate-900 truncate leading-snug">{subject.name}</h1>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {topics.length === 1 ? '1 Thema' : `${topics.length} Themen`} in diesem Fach
+            </p>
+          </div>
         </div>
         
         <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
@@ -139,7 +145,7 @@ export function SubjectPage() {
             <Edit2 className="w-4 h-4" />
             <span>Umbenennen</span>
           </Button>
-          <Button variant="ghost" onClick={() => setIsDeleteDialogOpen(true)} aria-label="Fach löschen" className="text-red-600 hover:text-red-700 hover:bg-red-50 px-3">
+          <Button variant="ghost" onClick={() => setIsDeleteDialogOpen(true)} aria-label="Fach löschen" className="text-slate-400 hover:text-red-600 hover:bg-red-50/80 px-2.5">
             <Trash2 className="w-4 h-4" />
           </Button>
         </div>
@@ -155,42 +161,57 @@ export function SubjectPage() {
         </div>
 
         {topics.length === 0 ? (
-          <div className="border-2 border-dashed border-slate-200 rounded-xl p-8 sm:p-12 flex flex-col items-center justify-center text-center bg-white/50">
-            <h3 className="text-sm font-medium text-slate-900 mb-1">Noch keine Themen</h3>
-            <p className="text-sm text-slate-500 max-w-sm mb-4">
-              Erstelle ein Thema, um deine Unterlagen später zu organisieren.
+          <div className="border border-dashed border-slate-300/80 rounded-xl p-10 sm:p-14 flex flex-col items-center justify-center text-center bg-slate-50/50">
+            <div className="w-12 h-12 bg-white shadow-2xs border border-slate-200/80 rounded-xl flex items-center justify-center mb-4 text-blue-600">
+              <Folder className="w-6 h-6" />
+            </div>
+            <h3 className="text-base font-semibold text-slate-900 mb-1.5">Noch keine Themen</h3>
+            <p className="text-sm text-slate-500 max-w-sm mb-4 leading-relaxed">
+              Erstelle ein Thema, um deine Unterlagen und Dokumente für dieses Fach zu organisieren.
             </p>
-            <Button variant="secondary" onClick={() => setIsAddTopicDialogOpen(true)}>
-              Thema erstellen
+            <Button variant="secondary" onClick={() => setIsAddTopicDialogOpen(true)} className="gap-2">
+              <Plus className="w-4 h-4" />
+              <span>Thema erstellen</span>
             </Button>
           </div>
         ) : (
-          <div className="grid gap-3">
+          <div className="grid gap-2.5">
             {topics.map((topic) => (
               <div 
                 key={topic.id}
-                className="group flex items-center justify-between p-3.5 sm:p-4 bg-white border border-slate-200 rounded-lg shadow-sm hover:border-slate-300 hover:shadow-md transition-all gap-2"
+                className="group relative flex items-center justify-between p-3.5 sm:p-4 bg-white border border-slate-200/90 rounded-lg shadow-2xs hover:border-slate-300 hover:shadow-xs transition-[border-color,box-shadow] duration-150 gap-3 w-full min-w-0 max-w-full overflow-hidden"
               >
                 <Link 
                   to={`/subject/${subject.id}/topic/${topic.id}`} 
-                  className="flex items-center gap-3 flex-1 min-w-0"
+                  className="flex items-center gap-3.5 flex-1 min-w-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 rounded-md py-0.5 overflow-hidden"
                 >
-                  <Folder className="w-5 h-5 text-blue-500 shrink-0" />
-                  <span className="font-medium text-slate-900 truncate text-sm sm:text-base">{topic.name}</span>
+                  <div className="w-10 h-10 rounded-lg bg-blue-50/80 text-blue-600 border border-blue-100/70 flex items-center justify-center shrink-0 transition-transform duration-150 group-hover:scale-[1.03]">
+                    <Folder className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0 flex-1 overflow-hidden">
+                    <span className="font-semibold text-slate-900 group-hover:text-blue-600 transition-colors duration-150 truncate block text-sm sm:text-[15px] leading-snug">
+                      {topic.name}
+                    </span>
+                    <span className="text-xs text-slate-400 mt-0.5 block truncate">
+                      Thema öffnen & Unterlagen ansehen
+                    </span>
+                  </div>
                 </Link>
                 
-                <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100 transition-opacity shrink-0">
+                <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100 transition-opacity duration-150 shrink-0">
                   <button
                     onClick={() => setEditingTopic(topic)}
                     aria-label={`Thema "${topic.name}" umbenennen`}
-                    className="p-1.5 sm:p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 cursor-pointer"
+                    title="Umbenennen"
+                    className="p-1.5 sm:p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-[background-color,color,transform] duration-150 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 cursor-pointer"
                   >
                     <Edit2 className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => setDeletingTopic(topic)}
                     aria-label={`Thema "${topic.name}" löschen`}
-                    className="p-1.5 sm:p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 cursor-pointer"
+                    title="Löschen"
+                    className="p-1.5 sm:p-2 text-slate-400 hover:text-red-600 hover:bg-red-50/80 rounded-md transition-[background-color,color,transform] duration-150 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 cursor-pointer"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>

@@ -7,7 +7,7 @@ export function MainLayout() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-[#F9FAFB] flex flex-col text-slate-900 font-sans">
+    <div className="h-screen bg-[#F9FAFB] flex flex-col text-slate-900 font-sans overflow-hidden">
       <Header onOpenMobileMenu={() => setIsMobileMenuOpen(true)} />
       <div className="flex flex-1 overflow-hidden relative">
         <Sidebar

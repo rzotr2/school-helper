@@ -36,9 +36,9 @@ export function Dialog({ isOpen, onClose, title, children }: DialogProps) {
     <dialog
       ref={dialogRef}
       className={cn(
-        "backdrop:bg-slate-900/50 backdrop:backdrop-blur-sm",
+        "backdrop:bg-slate-900/50 backdrop:backdrop-blur-xs",
         "bg-white rounded-xl shadow-xl border border-slate-200 p-0 m-auto w-[calc(100%-2rem)] max-w-md max-h-[85vh] overflow-y-auto",
-        "open:animate-in open:fade-in-0 open:zoom-in-95 open:duration-200"
+        "open:animate-modal-in"
       )}
     >
       <div className="flex flex-col min-w-0">

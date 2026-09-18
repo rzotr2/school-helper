@@ -46,7 +46,7 @@ export function DeleteDialog({
           </Button>
           <Button
             type="button"
-            className="bg-red-600 hover:bg-red-700 text-white focus-visible:ring-red-500"
+            variant="danger"
             onClick={handleDelete}
             disabled={isDeleting}
           >
