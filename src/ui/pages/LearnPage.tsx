@@ -67,10 +67,12 @@ import type {
   WordBankTask,
 } from '../../application/use-cases/learning/learningTypes';
 import { cn } from '../../shared/utils/cn';
+import { useTranslation } from '../../shared/i18n/LanguageContext';
 
 const SESSION_QUESTION_LIMIT = 5;
 
 export function LearnPage() {
+  const { t } = useTranslation();
   const { user, isLoading: isAuthLoading } = useAuth();
 
   // Step 1: Subjects & Topics selection
@@ -148,7 +150,7 @@ export function LearnPage() {
           setSelectedSubjectId(loadedSubjects[0].id);
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Fehler beim Laden der Daten');
+        setError(err instanceof Error ? err.message : t('learning.loadError'));
       } finally {
         setIsLoadingTaxonomy(false);
       }
@@ -698,7 +700,7 @@ export function LearnPage() {
       setCurrentTask(task);
       setCurrentQuestionNumber((prev) => prev + 1);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Fehler beim Erstellen der nächsten Aufgabe');
+      setError(err instanceof Error ? err.message : t('learning.generationError', { message: '' }));
     } finally {
       setIsGenerating(false);
       setGenerationStep('');
@@ -946,10 +948,10 @@ export function LearnPage() {
           </div>
           <div>
             <h1 className="text-xl sm:text-2xl font-semibold text-slate-900">
-              Lernen
+              {t('learning.title')}
             </h1>
             <p className="text-sm text-slate-500 mt-0.5">
-              Quellenbasierte Lernaufgaben auf Basis deiner Schulunterlagen und verifizierter Webinhalte.
+              {t('learning.subtitle')}
             </p>
           </div>
         </div>
@@ -959,7 +961,7 @@ export function LearnPage() {
         <div className="p-4 bg-red-50/80 border border-red-200/90 rounded-xl text-sm text-red-700 flex items-start gap-3">
           <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
           <div className="space-y-1">
-            <p className="font-medium text-red-800">Hinweis</p>
+            <p className="font-medium text-red-800">{t('common.notice')}</p>
             <p>{error}</p>
           </div>
         </div>
@@ -972,10 +974,10 @@ export function LearnPage() {
           <div className="space-y-2">
             <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
               <BookOpen className="w-4 h-4 text-slate-400" />
-              <span>1. Fach auswählen</span>
+              <span>{t('learning.step1Subject')}</span>
             </label>
             {subjects.length === 0 ? (
-              <p className="text-sm text-slate-400 italic">Noch keine Fächer angelegt.</p>
+              <p className="text-sm text-slate-400 italic">{t('learning.noSubjects')}</p>
             ) : (
               <div className="flex flex-wrap gap-2">
                 {subjects.map((s) => {
@@ -1001,7 +1003,7 @@ export function LearnPage() {
                             ? 'bg-blue-200/70 text-blue-800'
                             : 'bg-slate-100 text-slate-500',
                         )}
-                        aria-label={`${topicCount} ${topicCount === 1 ? 'Thema' : 'Themen'}`}
+                        aria-label={t('learning.topicCountAria', { count: topicCount })}
                       >
                         {topicCount}
                       </span>
@@ -1018,7 +1020,7 @@ export function LearnPage() {
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2">
                 <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
                   <Layers className="w-4 h-4 text-slate-400" />
-                  <span>2. Themen auswählen (mindestens eins)</span>
+                  <span>{t('learning.step2Topics')}</span>
                 </label>
                 {selectableTopics.length > 0 && (
                   <button
@@ -1036,37 +1038,37 @@ export function LearnPage() {
                     className="text-xs text-blue-600 hover:text-blue-800 font-medium cursor-pointer self-start sm:self-auto transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 rounded px-1"
                   >
                     {selectableTopics.every((t) => selectedTopicIds.includes(t.id))
-                      ? 'Auswahl aufheben'
-                      : 'Alle mit Unterlagen auswählen'}
+                      ? t('learning.deselectAll')
+                      : t('learning.selectAllWithDocs')}
                   </button>
                 )}
               </div>
 
               {availableTopics.length === 0 ? (
                 <p className="text-sm text-slate-400 italic">
-                  Diesem Fach sind noch keine Themen zugeordnet.
+                  {t('learning.noTopicsAssigned')}
                 </p>
               ) : (
                 <div className="space-y-3">
                   <div className="flex flex-wrap gap-2">
-                    {availableTopics.map((t) => {
-                      const stats = topicDocumentCounts.get(t.id);
+                    {availableTopics.map((tItem) => {
+                      const stats = topicDocumentCounts.get(tItem.id);
                       const docCount = stats?.completed ?? 0;
                       const totalDocs = stats?.total ?? 0;
                       const isSelectable = docCount > 0;
-                      const isSelected = selectedTopicIds.includes(t.id);
+                      const isSelected = selectedTopicIds.includes(tItem.id);
 
                       return (
                         <button
-                          key={t.id}
+                          key={tItem.id}
                           type="button"
                           disabled={!isSelectable}
-                          onClick={() => toggleTopic(t.id)}
+                          onClick={() => toggleTopic(tItem.id)}
                           title={
                             !isSelectable
                               ? totalDocs > 0
-                                ? 'Dokumente werden noch verarbeitet'
-                                : 'Thema enthält keine Dokumente und kann nicht gelernt werden'
+                                ? t('learning.docsStillProcessing')
+                                : t('learning.topicHasNoDocs')
                               : undefined
                           }
                           className={cn(
@@ -1081,7 +1083,7 @@ export function LearnPage() {
                               'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 cursor-pointer active:scale-[0.98]',
                           )}
                         >
-                          <span className="truncate flex-1 min-w-0 text-left">{t.name}</span>
+                          <span className="truncate flex-1 min-w-0 text-left">{tItem.name}</span>
                           {isSelectable ? (
                             <span
                               className={cn(
@@ -1091,11 +1093,11 @@ export function LearnPage() {
                                   : 'bg-slate-200/80 text-slate-600',
                               )}
                             >
-                              {docCount} Dok.
+                              {t('learning.docsBadge', { count: docCount })}
                             </span>
                           ) : (
                             <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200/60 text-slate-400 font-normal shrink-0">
-                              {totalDocs > 0 ? 'Wird verarbeitet…' : '0 Dok.'}
+                              {totalDocs > 0 ? t('learning.docsStillProcessing') : t('learning.noDocsBadge')}
                             </span>
                           )}
                           {isSelectable && isSelected && <span className="text-slate-300 shrink-0">✓</span>}
@@ -1109,11 +1111,10 @@ export function LearnPage() {
                       <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                       <div>
                         <p className="font-semibold text-amber-950">
-                          Keine Themen mit Dokumenten vorhanden
+                          {t('learning.noTopicsWithDocsTitle')}
                         </p>
                         <p className="text-amber-800 mt-0.5">
-                          Für dieses Fach wurden noch keine fertigen Unterlagen hochgeladen. Bitte lade
-                          zuerst Dokumente in deine Themen hoch, um ein Quiz erstellen zu können.
+                          {t('learning.noTopicsWithDocsDesc')}
                         </p>
                       </div>
                     </div>
@@ -1129,7 +1130,7 @@ export function LearnPage() {
               <div className="space-y-2">
                 <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
                   <BarChart2 className="w-4 h-4 text-slate-400" />
-                  <span>3. Schwierigkeit</span>
+                  <span>{t('learning.step3Difficulty')}</span>
                 </label>
                 <div className="flex flex-wrap gap-2">
                   {(['leicht', 'mittel', 'schwer'] as LearningDifficulty[]).map((d) => (
@@ -1143,7 +1144,7 @@ export function LearnPage() {
                           : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50',
                       )}
                     >
-                      {d}
+                      {t(`learning.difficulties.${d === 'leicht' ? 'easy' : d === 'mittel' ? 'medium' : 'hard'}`)}
                     </button>
                   ))}
                 </div>
@@ -1152,7 +1153,7 @@ export function LearnPage() {
               <div className="space-y-2">
                 <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
                   <Sparkles className="w-4 h-4 text-slate-400" />
-                  <span>4. Lernmodus</span>
+                  <span>{t('learning.step4Mode')}</span>
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   <button
@@ -1166,15 +1167,15 @@ export function LearnPage() {
                     )}
                   >
                     <div>
-                      <div className="font-semibold text-sm text-slate-900">Multiple-Choice Quiz</div>
+                      <div className="font-semibold text-sm text-slate-900">{t('learning.modesDetailed.quizTitle')}</div>
                       <p className="text-xs text-slate-500 mt-1">
-                        Verifizierte Fragen mit 4 Antwortoptionen und Quellennachweis.
+                        {t('learning.modesDetailed.quizDesc')}
                       </p>
                     </div>
                     {selectedMode === 'quiz' && (
                       <span className="text-[11px] font-semibold text-blue-600 mt-3 inline-flex items-center gap-1">
                         <CheckCircle2 className="w-3.5 h-3.5" />
-                        Ausgewählt
+                        {t('learning.selectedBadge')}
                       </span>
                     )}
                   </button>
@@ -1190,15 +1191,15 @@ export function LearnPage() {
                     )}
                   >
                     <div>
-                      <div className="font-semibold text-sm text-slate-900">Karteikarten</div>
+                      <div className="font-semibold text-sm text-slate-900">{t('learning.modesDetailed.flashcardsTitle')}</div>
                       <p className="text-xs text-slate-500 mt-1">
-                        Kompakte Frage- und Antwortkarten aus denselben Quellen.
+                        {t('learning.modesDetailed.flashcardsDesc')}
                       </p>
                     </div>
                     {selectedMode === 'flashcards' && (
                       <span className="text-[11px] font-semibold text-blue-600 mt-3 inline-flex items-center gap-1">
                         <CheckCircle2 className="w-3.5 h-3.5" />
-                        Ausgewählt
+                        {t('learning.selectedBadge')}
                       </span>
                     )}
                   </button>
@@ -1214,15 +1215,15 @@ export function LearnPage() {
                     )}
                   >
                     <div>
-                      <div className="font-semibold text-sm text-slate-900">Lückentext</div>
+                      <div className="font-semibold text-sm text-slate-900">{t('learning.modesDetailed.fillBlankTitle')}</div>
                       <p className="text-xs text-slate-500 mt-1">
-                        Wichtige Schlüsselbegriffe im Kontext ergänzen.
+                        {t('learning.modesDetailed.fillBlankDesc')}
                       </p>
                     </div>
                     {selectedMode === 'fill-in-the-blank' && (
                       <span className="text-[11px] font-semibold text-blue-600 mt-3 inline-flex items-center gap-1">
                         <CheckCircle2 className="w-3.5 h-3.5" />
-                        Ausgewählt
+                        {t('learning.selectedBadge')}
                       </span>
                     )}
                   </button>
@@ -1238,15 +1239,15 @@ export function LearnPage() {
                     )}
                   >
                     <div>
-                      <div className="font-semibold text-sm text-slate-900">Zuordnen</div>
+                      <div className="font-semibold text-sm text-slate-900">{t('learning.modesDetailed.matchingTitle')}</div>
                       <p className="text-xs text-slate-500 mt-1">
-                        Begriffe und Zusammenhänge richtig zuordnen.
+                        {t('learning.modesDetailed.matchingDesc')}
                       </p>
                     </div>
                     {selectedMode === 'matching' && (
                       <span className="text-[11px] font-semibold text-blue-600 mt-3 inline-flex items-center gap-1">
                         <CheckCircle2 className="w-3.5 h-3.5" />
-                        Ausgewählt
+                        {t('learning.selectedBadge')}
                       </span>
                     )}
                   </button>
@@ -1262,15 +1263,15 @@ export function LearnPage() {
                     )}
                   >
                     <div>
-                      <div className="font-semibold text-sm text-slate-900">Wortbank</div>
+                      <div className="font-semibold text-sm text-slate-900">{t('learning.modesDetailed.wordBankTitle')}</div>
                       <p className="text-xs text-slate-500 mt-1">
-                        Begriffe per Drag &amp; Drop oder Klick in Lücken einsetzen.
+                        {t('learning.modesDetailed.wordBankDesc')}
                       </p>
                     </div>
                     {selectedMode === 'word-bank' && (
                       <span className="text-[11px] font-semibold text-blue-600 mt-3 inline-flex items-center gap-1">
                         <CheckCircle2 className="w-3.5 h-3.5" />
-                        Ausgewählt
+                        {t('learning.selectedBadge')}
                       </span>
                     )}
                   </button>
@@ -1295,12 +1296,15 @@ export function LearnPage() {
                 className="inline-flex items-center justify-center w-full sm:w-auto gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl shadow-xs transition-[background-color,transform] duration-150 cursor-pointer active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
               >
                 <span>
-                  Lernsession starten ({SESSION_QUESTION_LIMIT}{' '}
-                  {selectedMode === 'flashcards'
-                    ? 'Karten'
-                    : selectedMode === 'matching' || selectedMode === 'fill-in-the-blank' || selectedMode === 'word-bank'
-                      ? 'Aufgaben'
-                      : 'Fragen'})
+                  {t('learning.startSessionWithCount', {
+                    count: SESSION_QUESTION_LIMIT,
+                    unit:
+                      selectedMode === 'flashcards'
+                        ? t('learning.unitCards')
+                        : selectedMode === 'matching' || selectedMode === 'fill-in-the-blank' || selectedMode === 'word-bank'
+                          ? t('learning.unitTasks')
+                          : t('learning.unitQuestions'),
+                  })}
                 </span>
                 <ArrowRight className="w-4 h-4" />
               </button>
@@ -1314,9 +1318,9 @@ export function LearnPage() {
         <div className="bg-white border border-slate-200/90 rounded-xl p-6 sm:p-8 text-center space-y-3 shadow-2xs">
           <Loader2 className="w-8 h-8 text-blue-600 animate-spin mx-auto" />
           <h3 className="text-base font-semibold text-slate-900">
-            Quellenbasiertes Lernen wird vorbereitet
+            {t('learning.preparingTitle')}
           </h3>
-          <p className="text-sm text-slate-500 max-w-md mx-auto">{generationStep || 'Bitte warten…'}</p>
+          <p className="text-sm text-slate-500 max-w-md mx-auto">{generationStep || t('learning.pleaseWait')}</p>
         </div>
       )}
 
@@ -1338,35 +1342,35 @@ export function LearnPage() {
             </div>
             <h2 className="text-lg sm:text-xl font-bold text-slate-900">
               {selectedMode === 'flashcards'
-                ? 'Karteikarten-Session abgeschlossen!'
+                ? t('learning.sessionCompletedFlashcardsTitle')
                 : selectedMode === 'fill-in-the-blank'
-                  ? 'Lückentext-Session abgeschlossen!'
+                  ? t('learning.sessionCompletedFillBlankTitle')
                   : selectedMode === 'matching'
-                    ? 'Zuordnungs-Session abgeschlossen!'
+                    ? t('learning.sessionCompletedMatchingTitle')
                     : selectedMode === 'word-bank'
-                      ? 'Wortbank-Session abgeschlossen!'
-                      : 'Quiz abgeschlossen!'}
+                      ? t('learning.sessionCompletedWordBankTitle')
+                      : t('learning.sessionCompletedQuizTitle')}
             </h2>
             <p className="text-sm text-slate-500">
               {selectedMode === 'flashcards'
-                ? `Du hast alle ${completedTasks.length} Karteikarten durchgearbeitet.`
+                ? t('learning.summaryFlashcardsDesc', { count: completedTasks.length })
                 : selectedMode === 'fill-in-the-blank'
-                  ? `Du hast ${fillBlankSummary?.correctCount ?? 0} von ${fillBlankSummary?.totalTasks ?? 0} Lücken richtig ergänzt.`
+                  ? t('learning.summaryFillBlankDesc', { correct: fillBlankSummary?.correctCount ?? 0, total: fillBlankSummary?.totalTasks ?? 0 })
                   : selectedMode === 'matching'
-                    ? `Du hast alle ${matchingSummary?.totalPairs ?? 0} Paare in ${completedTasks.length} Aufgaben erfolgreich zugeordnet.`
+                    ? t('learning.summaryMatchingDesc', { pairs: matchingSummary?.totalPairs ?? 0, tasks: completedTasks.length })
                     : selectedMode === 'word-bank'
-                      ? `Du hast ${wordBankSummary?.correctBlanks ?? 0} von ${wordBankSummary?.totalBlanks ?? 0} Lücken in ${completedTasks.length} Aufgaben richtig ausgefüllt.`
-                      : `Du hast ${quizSummary?.correctCount ?? 0} von ${quizSummary?.totalQuestions ?? 0} Fragen richtig beantwortet.`}
+                      ? t('learning.summaryWordBankDesc', { correct: wordBankSummary?.correctBlanks ?? 0, total: wordBankSummary?.totalBlanks ?? 0, tasks: completedTasks.length })
+                      : t('learning.summaryQuizDesc', { correct: quizSummary?.correctCount ?? 0, total: quizSummary?.totalQuestions ?? 0 })}
             </p>
             <div className="inline-flex items-center gap-2 text-xs font-medium text-slate-600 bg-slate-50 border border-slate-200/80 rounded-lg py-1.5 px-3 mx-auto mt-2">
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-              <span>Dein Lernfortschritt wurde aktualisiert.</span>
+              <span>{t('learning.learningProgressUpdated')}</span>
             </div>
           </div>
 
           <div className="p-3.5 sm:p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-3">
             <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              {selectedMode === 'flashcards' || selectedMode === 'matching' ? 'Bearbeitete Themen' : 'Ergebnis nach Themen'}
+              {selectedMode === 'flashcards' || selectedMode === 'matching' ? t('learning.topicsCoveredHeading') : t('learning.resultsByTopicHeading')}
             </h3>
             <div className="space-y-2">
               {selectedMode === 'flashcards' && flashcardSummary
@@ -1377,7 +1381,7 @@ export function LearnPage() {
                     >
                       <span className="font-medium text-slate-800 truncate">{item.topicName}</span>
                       <span className="text-xs font-semibold text-slate-600 shrink-0">
-                        {item.total} {item.total === 1 ? 'Karte' : 'Karten'}
+                        {item.total} {item.total === 1 ? t('learning.unitCard') : t('learning.unitCards')}
                       </span>
                     </div>
                   ))
@@ -1389,7 +1393,7 @@ export function LearnPage() {
                       >
                         <span className="font-medium text-slate-800 truncate">{item.topicName}</span>
                         <span className="text-xs font-semibold text-slate-600 shrink-0">
-                          {item.pairs} {item.pairs === 1 ? 'Paar' : 'Paare'} ({item.total} {item.total === 1 ? 'Aufgabe' : 'Aufgaben'})
+                          {t('learning.pairCount', { count: item.pairs })} {t('learning.taskCountWithParens', { count: item.total })}
                         </span>
                       </div>
                     ))
@@ -1401,7 +1405,7 @@ export function LearnPage() {
                       <span className="font-medium text-slate-800 truncate">{item.topicName}</span>
                       <div className="flex items-center gap-2 shrink-0">
                         <span className="text-xs font-semibold text-slate-600">
-                          {item.correct} / {item.total} richtig
+                          {t('profile.correctOfTotal', { correct: item.correct, total: item.total })}
                         </span>
                         <span
                           className={cn(
@@ -1427,13 +1431,13 @@ export function LearnPage() {
               className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-sm font-medium rounded-lg shadow-xs transition-[background-color,transform] duration-150 cursor-pointer active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
             >
               <RotateCcw className="w-4 h-4" />
-              <span>Erneut spielen</span>
+              <span>{t('learning.practiceAgain')}</span>
             </button>
             <button
               onClick={resetSession}
               className="px-4 py-2 bg-white border border-slate-200/90 text-slate-700 hover:bg-slate-50 text-sm font-medium rounded-lg transition-[background-color,border-color,transform] duration-150 cursor-pointer active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
             >
-              Andere Themen wählen
+              {t('learning.changeTopics')}
             </button>
           </div>
         </div>
@@ -1447,11 +1451,10 @@ export function LearnPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
                   {selectedMode === 'flashcards'
-                    ? 'Karte'
+                    ? t('learning.cardOf', { current: currentQuestionNumber, total: SESSION_QUESTION_LIMIT })
                     : selectedMode === 'matching' || selectedMode === 'fill-in-the-blank' || selectedMode === 'word-bank'
-                      ? 'Aufgabe'
-                      : 'Frage'}{' '}
-                  {currentQuestionNumber} von {SESSION_QUESTION_LIMIT}
+                      ? t('learning.taskOf', { current: currentQuestionNumber, total: SESSION_QUESTION_LIMIT })
+                      : t('learning.questionOf', { current: currentQuestionNumber, total: SESSION_QUESTION_LIMIT })}
                 </span>
                 {currentTopicName && (
                   <span className="text-[11px] font-medium bg-slate-100/80 text-slate-700 px-2 py-0.5 rounded border border-slate-200/60 truncate max-w-[160px] sm:max-w-none">
@@ -1460,7 +1463,7 @@ export function LearnPage() {
                 )}
                 {currentTask.difficulty && (
                   <span className="text-[11px] font-medium bg-blue-50/80 text-blue-700 px-2 py-0.5 rounded border border-blue-100/60 capitalize">
-                    {currentTask.difficulty}
+                    {t(`learning.difficulties.${currentTask.difficulty}`)}
                   </span>
                 )}
               </div>
@@ -1468,7 +1471,7 @@ export function LearnPage() {
                 onClick={resetSession}
                 className="text-xs text-slate-500 hover:text-slate-800 cursor-pointer transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 rounded px-1"
               >
-                Session beenden
+                {t('learning.endSession')}
               </button>
             </div>
             {/* Progress bar */}
@@ -1537,7 +1540,7 @@ export function LearnPage() {
                 <div className="space-y-3 pt-4 border-t border-slate-100">
                   <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-2">
                     <div className="flex items-center gap-2 text-xs font-semibold text-slate-700 uppercase tracking-wide">
-                      <span>Erklärung</span>
+                      <span>{t('learning.explanationTitle')}</span>
                     </div>
                     <p className="text-sm text-slate-800 leading-relaxed">
                       {currentTask.explanation}
@@ -1556,8 +1559,8 @@ export function LearnPage() {
                     >
                       <span>
                         {completedTasks.length >= SESSION_QUESTION_LIMIT
-                          ? 'Ergebnis ansehen'
-                          : 'Nächste Frage'}
+                          ? t('learning.viewResults')
+                          : t('learning.nextQuestion')}
                       </span>
                       <ArrowRight className="w-4 h-4" />
                     </button>
@@ -1581,10 +1584,10 @@ export function LearnPage() {
                   <div className="absolute inset-0 w-full h-full backface-hidden bg-white border border-slate-200/90 rounded-2xl shadow-sm p-4 sm:p-8 flex flex-col justify-between select-none">
                     <div className="flex items-center justify-between pb-3 border-b border-slate-100 shrink-0">
                       <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                        Vorderseite · Frage
+                        {t('learning.cardFrontTitle')}
                       </span>
                       <span className="text-xs text-slate-400">
-                        Klicken zum Umdrehen
+                        {t('learning.clickToFlipPrompt')}
                       </span>
                     </div>
 
@@ -1612,7 +1615,7 @@ export function LearnPage() {
                         className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold rounded-xl transition-[background-color,transform] duration-150 cursor-pointer border border-slate-200/80 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
                       >
                         <RotateCcw className="w-4 h-4 text-slate-600" />
-                        <span>Karte umdrehen</span>
+                        <span>{t('learning.flipCardBtn')}</span>
                       </button>
                     </div>
                   </div>
@@ -1621,7 +1624,7 @@ export function LearnPage() {
                   <div className="absolute inset-0 w-full h-full backface-hidden rotate-y-180 bg-white border border-slate-200/90 rounded-2xl shadow-sm p-4 sm:p-8 flex flex-col justify-between">
                     <div className="flex items-center justify-between pb-3 border-b border-slate-100 shrink-0">
                       <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                        Rückseite · Antwort
+                        {t('learning.cardBackTitle')}
                       </span>
                       <button
                         type="button"
@@ -1629,7 +1632,7 @@ export function LearnPage() {
                         className="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1 cursor-pointer transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 rounded px-1"
                       >
                         <RotateCcw className="w-3 h-3" />
-                        <span>Zurück</span>
+                        <span>{t('learning.backBtn')}</span>
                       </button>
                     </div>
 
@@ -1638,7 +1641,7 @@ export function LearnPage() {
                         <>
                           <div>
                             <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                              Frage
+                              {t('learning.questionLabel')}
                             </div>
                             <p className="text-xs sm:text-sm font-medium text-slate-700 bg-slate-50/90 p-3 rounded-xl border border-slate-200/70">
                               {currentTask.question}
@@ -1647,7 +1650,7 @@ export function LearnPage() {
 
                           <div>
                             <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                              Antwort
+                              {t('learning.answerLabel')}
                             </div>
                             <p className="text-sm sm:text-lg font-semibold text-slate-900 leading-relaxed">
                               {currentTask.answer}
@@ -1657,7 +1660,7 @@ export function LearnPage() {
                           {currentTask.evidence && (
                             <div className="p-3 bg-blue-50/40 rounded-xl border border-blue-100 text-xs text-slate-600 italic">
                               <span className="font-semibold not-italic text-slate-700 block mb-1">
-                                Beleg aus den Quellen:
+                                {t('learning.sourceEvidenceSingle')}
                               </span>
                               „{currentTask.evidence}“
                             </div>
@@ -1673,7 +1676,7 @@ export function LearnPage() {
                         className="inline-flex items-center gap-1.5 px-3 py-2 text-slate-600 hover:bg-slate-100 rounded-lg text-xs font-medium transition-[background-color,transform] duration-150 cursor-pointer active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
                       >
                         <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
-                        <span>Vorderseite</span>
+                        <span>{t('learning.frontBtn')}</span>
                       </button>
 
                       <button
@@ -1683,8 +1686,8 @@ export function LearnPage() {
                       >
                         <span>
                           {completedTasks.length >= SESSION_QUESTION_LIMIT
-                            ? 'Ergebnis ansehen'
-                            : 'Nächste Karte'}
+                            ? t('learning.viewResults')
+                            : t('learning.nextCard')}
                         </span>
                         <ArrowRight className="w-4 h-4" />
                       </button>
@@ -1700,10 +1703,10 @@ export function LearnPage() {
             <div className="w-full max-w-2xl mx-auto bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-8 shadow-xs space-y-6">
               <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                 <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                  Lückentext · Vervollständige den Satz
+                  {t('learning.fillBlankHeader')}
                 </span>
                 <span className="text-xs text-slate-400">
-                  {isAnswerRevealed ? '✓ Überprüft' : 'Schlüsselbegriff gesucht'}
+                  {isAnswerRevealed ? t('learning.fillBlankCheckedBadge') : t('learning.fillBlankKeywordNeeded')}
                 </span>
               </div>
 
@@ -1749,7 +1752,7 @@ export function LearnPage() {
                       type="text"
                       value={fillBlankInput}
                       onChange={(e) => setFillBlankInput(e.target.value)}
-                      placeholder="Gesuchten Begriff eingeben…"
+                      placeholder={t('learning.fillBlankInputPlaceholder')}
                       autoFocus
                       className="flex-1 px-4 py-2.5 rounded-xl border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm font-medium bg-white text-slate-900 shadow-2xs transition-[border-color,box-shadow] duration-150"
                     />
@@ -1758,11 +1761,11 @@ export function LearnPage() {
                       disabled={!fillBlankInput.trim()}
                       className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl shadow-xs transition-[background-color,transform] duration-150 active:scale-95 cursor-pointer shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
                     >
-                      Prüfen
+                      {t('learning.fillBlankCheckBtn')}
                     </button>
                   </div>
                   <p className="text-xs text-slate-400">
-                    Tipp: Drücke Enter zum schnellen Überprüfen deiner Antwort.
+                    {t('learning.fillBlankHint')}
                   </p>
                 </form>
               ) : (
@@ -1783,11 +1786,11 @@ export function LearnPage() {
                     )}
                     <div className="space-y-1">
                       <p className="font-semibold text-sm">
-                        {fillBlankResult?.isCorrect ? 'Richtig!' : 'Nicht ganz'}
+                        {fillBlankResult?.isCorrect ? t('learning.fillBlankCorrect') : t('learning.fillBlankIncorrect')}
                       </p>
                       {!fillBlankResult?.isCorrect && (
                         <p className="text-xs text-slate-700">
-                          Richtige Antwort:{' '}
+                          {t('learning.correctAnswerLabel')}{' '}
                           <span className="font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200">
                             {currentTask.answer}
                           </span>
@@ -1799,7 +1802,7 @@ export function LearnPage() {
                   {currentTask.evidence && (
                     <div className="p-3.5 bg-blue-50/40 rounded-xl border border-blue-100 text-xs text-slate-600 italic">
                       <span className="font-semibold not-italic text-slate-700 block mb-1">
-                        Beleg aus den Quellen:
+                        {t('learning.sourceEvidenceSingle')}
                       </span>
                       „{currentTask.evidence}“
                     </div>
@@ -1813,8 +1816,8 @@ export function LearnPage() {
                     >
                       <span>
                         {completedTasks.length >= SESSION_QUESTION_LIMIT
-                          ? 'Ergebnis ansehen'
-                          : 'Nächste Aufgabe'}
+                          ? t('learning.viewResults')
+                          : t('learning.nextTask')}
                       </span>
                       <ArrowRight className="w-4 h-4" />
                     </button>
@@ -1832,10 +1835,10 @@ export function LearnPage() {
               <div className="w-full max-w-3xl mx-auto bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-7 shadow-xs space-y-6">
                 <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                   <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                    Zuordnen · {matchedPairIds.length} von {currentTask.pairs.length} zugeordnet
+                    {t('learning.matchingHeader', { matched: matchedPairIds.length, total: currentTask.pairs.length })}
                   </span>
                   <span className="text-xs text-slate-400">
-                    {isAllMatched ? '✓ Alle Paare zugeordnet' : 'Klicke Begriff, dann Erklärung'}
+                    {isAllMatched ? t('learning.allPairsMatched') : t('learning.clickConceptThenDesc')}
                   </span>
                 </div>
 
@@ -1845,7 +1848,7 @@ export function LearnPage() {
                     {currentTask.instruction}
                   </h2>
                   <p className="text-xs text-slate-500 mt-1">
-                    Wähle zuerst ein Element aus der linken Spalte und klicke anschließend auf das passende Gegenstück rechts.
+                    {t('learning.matchingInstructionSub')}
                   </p>
                 </div>
 
@@ -1854,7 +1857,7 @@ export function LearnPage() {
                   {/* Left Column (Terms / Concepts) */}
                   <div className="space-y-2.5">
                     <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider px-1">
-                      Begriffe
+                      {t('learning.termsColumnHeading')}
                     </div>
                     <div className="space-y-2">
                       {currentTask.pairs.map((pair) => {
@@ -1902,7 +1905,7 @@ export function LearnPage() {
                   {/* Right Column (Definitions / Descriptions) */}
                   <div className="space-y-2.5">
                     <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider px-1">
-                      Zuordnungen
+                      {t('learning.matchesColumnHeading')}
                     </div>
                     <div className="space-y-2">
                       {shuffledRightPairs.map((pair) => {
@@ -1955,10 +1958,10 @@ export function LearnPage() {
                         <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
                         <div>
                           <p className="text-sm font-semibold text-emerald-950">
-                            Alles richtig zugeordnet!
+                            {t('learning.allCorrectlyMatched')}
                           </p>
                           <p className="text-xs text-emerald-800 mt-0.5">
-                            Alle {currentTask.pairs.length} Paare wurden erfolgreich verknüpft.
+                            {t('learning.allPairsLinkedSuccessfully', { count: currentTask.pairs.length })}
                           </p>
                         </div>
                       </div>
@@ -1967,7 +1970,7 @@ export function LearnPage() {
                     {/* Evidence Quotes list for learning reinforcement */}
                     <div className="space-y-2">
                       <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                        Belege aus den Quellen:
+                        {t('learning.sourceEvidenceHeader')}
                       </div>
                       <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
                         {currentTask.pairs.map((p) => (
@@ -1990,8 +1993,8 @@ export function LearnPage() {
                       >
                         <span>
                           {completedTasks.length >= SESSION_QUESTION_LIMIT
-                            ? 'Ergebnis ansehen'
-                            : 'Nächste Aufgabe'}
+                            ? t('learning.viewResults')
+                            : t('learning.nextTask')}
                         </span>
                         <ArrowRight className="w-4 h-4" />
                       </button>
@@ -2018,7 +2021,7 @@ export function LearnPage() {
               <div className="w-full max-w-3xl mx-auto bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-7 shadow-xs space-y-6">
                 <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                   <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                    Wortbank · {filledCount} von {totalBlanks} Lücken gefüllt
+                    {t('learning.wordBankHeader', { filled: filledCount, total: totalBlanks })}
                   </span>
                   <span className="text-xs text-slate-400">
                     {isAnswerRevealed
@@ -2027,14 +2030,14 @@ export function LearnPage() {
                             checkWordBankAnswer(wordBankPlacements[b.id] || '', b.answer),
                           ).length;
                           return correctCount === totalBlanks
-                            ? '✓ Alle Lücken richtig ausgefüllt'
-                            : `${correctCount} von ${totalBlanks} richtig`;
+                            ? t('learning.allGapsCorrect')
+                            : t('learning.gapsCorrectSummary', { correct: correctCount, total: totalBlanks });
                         })()
                       : wordBankChecked
-                        ? 'Korrigiere noch fehlerhafte Lücken'
+                        ? t('learning.correctMistakesPrompt')
                         : isAllFilled
-                          ? 'Bereit zum Prüfen'
-                          : 'Wörter ziehen oder antippen'}
+                          ? t('learning.readyToCheck')
+                          : t('learning.dragOrTapWords')}
                   </span>
                 </div>
 
@@ -2044,7 +2047,7 @@ export function LearnPage() {
                     {currentTask.instruction}
                   </h2>
                   <p className="text-xs text-slate-500 mt-1">
-                    Ziehe Wörter aus der Wortbank in die passenden Lücken oder tippe zuerst auf ein Wort und dann auf die gewünschte Lücke.
+                    {t('learning.wordBankInstructionSub')}
                   </p>
                 </div>
 
@@ -2095,7 +2098,7 @@ export function LearnPage() {
                                 type="button"
                                 onClick={() => handleRemoveWordFromBlank(blankId)}
                                 className="p-0.5 rounded-full hover:bg-slate-200/80 text-slate-400 hover:text-slate-700 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-500"
-                                aria-label={`Entferne ${placedWord} aus Lücke`}
+                                aria-label={t('learning.removeWordAria', { word: placedWord })}
                               >
                                 <X className="w-3 h-3" />
                               </button>
@@ -2117,7 +2120,10 @@ export function LearnPage() {
                               }
                             }}
                             disabled={isAnswerRevealed}
-                            aria-label={`Lücke ${blankId.replace('blank-', '')}${selectedWordBankToken ? `: Klicke um ${selectedWordBankToken} einzusetzen` : ''}`}
+                            aria-label={t('learning.gapAria', {
+                              id: blankId.replace('blank-', ''),
+                              action: selectedWordBankToken ? t('learning.gapActionInsert', { word: selectedWordBankToken }) : '',
+                            })}
                             className={cn(
                               'inline-flex items-center justify-center min-w-[90px] sm:min-w-[110px] h-8 sm:h-9 px-3 border-2 border-dashed rounded-lg text-xs font-medium transition-[background-color,border-color,box-shadow,color,transform] duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 select-none active:scale-[0.98]',
                               selectedWordBankToken
@@ -2125,7 +2131,9 @@ export function LearnPage() {
                                 : 'border-slate-300 bg-white/80 hover:bg-slate-100/80 hover:border-slate-400 text-slate-400',
                             )}
                           >
-                            {selectedWordBankToken ? 'Hier einsetzen' : `[ Lücke ${blankId.replace('blank-', '')} ]`}
+                            {selectedWordBankToken
+                              ? t('learning.insertHere')
+                              : t('learning.gapPlaceholder', { id: blankId.replace('blank-', '') })}
                           </button>
                         )}
                       </span>
@@ -2137,11 +2145,11 @@ export function LearnPage() {
                 <div className="space-y-2.5 pt-2">
                   <div className="flex items-center justify-between px-1">
                     <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                      Verfügbare Wörter ({currentTask.words.length - placedWords.size} übrig)
+                      {t('learning.availableWordsCount', { count: currentTask.words.length - placedWords.size })}
                     </span>
                     {selectedWordBankToken && (
                       <span className="text-xs text-blue-600 font-medium">
-                        Ausgewählt: „{selectedWordBankToken}“ (tippe auf eine freie Lücke)
+                        {t('learning.wordSelectedPrompt', { word: selectedWordBankToken })}
                       </span>
                     )}
                   </div>
@@ -2166,7 +2174,7 @@ export function LearnPage() {
                           className={cn(
                             'px-3.5 py-2 rounded-xl text-xs sm:text-sm font-medium border transition-[background-color,border-color,box-shadow,color,transform] duration-150 select-none shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
                             isPlaced &&
-                              'opacity-35 bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed shadow-none',
+                               'opacity-35 bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed shadow-none',
                             !isPlaced &&
                               isSelected &&
                               'border-blue-600 bg-blue-600 text-white cursor-pointer ring-2 ring-blue-500/40 shadow-xs scale-105',
@@ -2187,10 +2195,10 @@ export function LearnPage() {
                   <div className="pt-2 flex items-center justify-between border-t border-slate-100">
                     <div className="text-xs text-slate-500">
                       {!isAllFilled
-                        ? `Fülle alle ${totalBlanks} Lücken aus, um zu prüfen.`
+                        ? t('learning.fillAllGapsPrompt', { count: totalBlanks })
                         : wordBankChecked
-                          ? 'Einige Lücken sind noch fehlerhaft. Tausche Wörter aus und prüfe erneut.'
-                          : 'Alle Lücken sind belegt.'}
+                          ? t('learning.someGapsIncorrect')
+                          : t('learning.allGapsFilled')}
                     </div>
                     <button
                       type="button"
@@ -2198,7 +2206,7 @@ export function LearnPage() {
                       disabled={!isAllFilled}
                       className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl shadow-xs transition-[background-color,transform] duration-150 cursor-pointer active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
                     >
-                      <span>Prüfen</span>
+                      <span>{t('learning.fillBlankCheckBtn')}</span>
                       <ArrowRight className="w-4 h-4" />
                     </button>
                   </div>
@@ -2216,10 +2224,10 @@ export function LearnPage() {
                             <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
                             <div>
                               <p className="text-sm font-semibold text-emerald-950">
-                                Alles richtig ausgefüllt!
+                                {t('learning.allGapsFilledCorrectlyTitle')}
                               </p>
                               <p className="text-xs text-emerald-800 mt-0.5">
-                                Alle {totalBlanks} Lücken wurden korrekt mit den Begriffen belegt.
+                                {t('learning.allGapsFilledCorrectlyDesc', { count: totalBlanks })}
                               </p>
                             </div>
                           </div>
@@ -2228,10 +2236,10 @@ export function LearnPage() {
                             <XCircle className="w-5 h-5 text-amber-600 shrink-0" />
                             <div>
                               <p className="text-sm font-semibold text-amber-950">
-                                Einige Lücken sind noch fehlerhaft
+                                {t('learning.someGapsStillIncorrectTitle')}
                               </p>
                               <p className="text-xs text-amber-800 mt-0.5">
-                                {revealedCorrectCount} von {totalBlanks} Lücken richtig. Die richtigen Antworten sind unten aufgeführt.
+                                {t('learning.someGapsStillIncorrectDesc', { correct: revealedCorrectCount, total: totalBlanks })}
                               </p>
                             </div>
                           </div>
@@ -2240,7 +2248,7 @@ export function LearnPage() {
                         {/* Evidence / correct-answer reference */}
                         <div className="space-y-2">
                           <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                            {isFullyCorrect ? 'Belege aus den Quellen:' : 'Richtige Antworten:'}
+                            {isFullyCorrect ? t('learning.sourceEvidenceHeader') : t('learning.correctAnswersHeading')}
                           </div>
                           <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
                             {currentTask.blanks.map((b) => (
@@ -2263,8 +2271,8 @@ export function LearnPage() {
                           >
                             <span>
                               {completedTasks.length >= SESSION_QUESTION_LIMIT
-                                ? 'Ergebnis ansehen'
-                                : 'Nächste Aufgabe'}
+                                ? t('learning.viewResults')
+                                : t('learning.nextTask')}
                             </span>
                             <ArrowRight className="w-4 h-4" />
                           </button>
@@ -2284,11 +2292,11 @@ export function LearnPage() {
           )}>
             <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
               <Layers className="w-3.5 h-3.5 text-slate-400" />
-              <span>Verifizierte Quellen dieser Aufgabe</span>
+              <span>{t('learning.verifiedSourcesTitle')}</span>
             </h3>
 
             {referencedSources.length === 0 ? (
-              <p className="text-xs text-slate-400 italic">Keine Quellennachweise gefunden.</p>
+              <p className="text-xs text-slate-400 italic">{t('learning.noSourceCitationsFound')}</p>
             ) : (
               <div className="space-y-2">
                 {referencedSources.map((src) => {
@@ -2305,12 +2313,12 @@ export function LearnPage() {
                           </span>
                           {src.pageNumber && (
                             <span className="text-slate-500 text-[11px] shrink-0">
-                              · Seite {src.pageNumber}
+                              · {t('learning.pageLabel', { page: src.pageNumber })}
                             </span>
                           )}
                         </div>
                         <span className="text-[10px] font-semibold text-blue-700 bg-blue-100/60 px-2 py-0.5 rounded shrink-0 self-start sm:self-auto">
-                          Meine Unterlagen
+                          {t('learning.myDocumentsBadge')}
                         </span>
                       </div>
                     );
@@ -2340,12 +2348,12 @@ export function LearnPage() {
                             rel="noopener noreferrer"
                             className="inline-flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 underline transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 rounded"
                           >
-                            <span>Öffnen</span>
+                            <span>{t('common.open')}</span>
                             <ExternalLink className="w-3 h-3" />
                           </a>
                         )}
                         <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-100/60 px-2 py-0.5 rounded">
-                          Aktuelle Webquelle
+                          {t('learning.currentWebSourceBadge')}
                         </span>
                       </div>
                     </div>

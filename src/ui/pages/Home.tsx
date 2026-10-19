@@ -40,6 +40,7 @@ import { useDocumentActions } from '../hooks/useDocumentActions';
 import { useDocumentProcessing } from '../hooks/useDocumentProcessing';
 import { formatFileSize, formatDate } from '../../shared/utils/format';
 import { cn } from '../../shared/utils/cn';
+import { useTranslation } from '../../shared/i18n';
 
 const HOMOGLYPH_REGEX_MAP: Record<string, string> = {
   a: '[a\\u0430]', '\u0430': '[a\\u0430]',
@@ -117,6 +118,7 @@ function HighlightMatch({ text, query }: { text: string; query: string }) {
 }
 
 export function Home() {
+  const { t } = useTranslation();
   const { user, isLoading: isAuthLoading } = useAuth();
   const navigate = useNavigate();
   const [documents, setDocuments] = useState<Document[]>([]);
@@ -447,13 +449,13 @@ export function Home() {
     return (
       <div className="border border-red-200 rounded-xl p-8 flex flex-col items-center justify-center text-center bg-red-50/50">
         <AlertCircle className="w-8 h-8 text-red-500 mb-2" />
-        <h3 className="text-base font-medium text-red-900 mb-1">Ein Fehler ist aufgetreten</h3>
+        <h3 className="text-base font-medium text-red-900 mb-1">{t('dialogs.common.genericError')}</h3>
         <p className="text-sm text-red-700 max-w-md mb-4">{error}</p>
         <button
           onClick={loadData}
           className="px-4 py-2 bg-white border border-slate-300 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-50 transition-colors cursor-pointer"
         >
-          Erneut versuchen
+          {t('documents.retryProcessing')}
         </button>
       </div>
     );
@@ -463,9 +465,9 @@ export function Home() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-5">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Alle Dateien</h1>
+          <h1 className="text-2xl font-semibold text-slate-900">{t('documents.title')}</h1>
           <p className="text-sm text-slate-500">
-            Übersicht aller hochgeladenen PDF-Unterlagen aus deinen Fächern und Themen.
+            {t('documents.overviewSubtitle')}
           </p>
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -487,7 +489,7 @@ export function Home() {
             ) : (
               <Upload className="w-4 h-4 shrink-0" />
             )}
-            <span>Dokument hochladen</span>
+            <span>{t('documents.uploadBtn')}</span>
           </Button>
         </div>
       </div>
@@ -498,8 +500,8 @@ export function Home() {
           <button
             onClick={() => setActionError(null)}
             className="text-red-500 hover:text-red-700 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 rounded"
-            title="Schließen"
-            aria-label="Schließen"
+            title={t('viewer.close')}
+            aria-label={t('viewer.close')}
           >
             <X className="w-4 h-4" />
           </button>
@@ -519,15 +521,15 @@ export function Home() {
                 handleResetSearch();
               }
             }}
-            placeholder="Dokumente nach Text durchsuchen (z. B. Fotosynthese, Vokabeln)…"
+            placeholder={t('documents.searchPlaceholder')}
             className="w-full pl-10 pr-10 py-2.5 text-sm bg-white border border-slate-200/90 rounded-lg shadow-2xs focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 text-slate-900 placeholder:text-slate-400 transition-[border-color,box-shadow] duration-150"
           />
           {fullTextQuery && (
             <button
               onClick={handleResetSearch}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 rounded-md transition-[background-color,color,transform] duration-150 active:scale-95 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
-              title="Suche zurücksetzen"
-              aria-label="Suche zurücksetzen"
+              title={t('documents.resetSearch')}
+              aria-label={t('documents.resetSearch')}
             >
               <X className="w-4 h-4" />
             </button>
@@ -541,15 +543,14 @@ export function Home() {
             {isSearching ? (
               <div className="flex items-center gap-2 text-slate-500">
                 <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
-                <span>Suche läuft…</span>
+                <span>{t('documents.searching')}</span>
               </div>
             ) : (
               <div>
-                <span className="font-semibold text-slate-900">{searchResults.length}</span>{' '}
-                {searchResults.length === 1 ? 'Treffer' : 'Treffer'} gefunden
+                <span>{t('documents.matchesFound', { count: searchResults.length })}</span>
                 {debouncedQuery.trim() && (
                   <span>
-                    {' '}für „<span className="font-medium text-slate-900">{debouncedQuery.trim()}</span>“
+                    {t('documents.forQuery', { query: debouncedQuery.trim() })}
                   </span>
                 )}
               </div>
@@ -558,7 +559,7 @@ export function Home() {
               onClick={handleResetSearch}
               className="text-xs font-medium text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
             >
-              Suche beenden
+              {t('documents.stopSearch')}
             </button>
           </div>
 
@@ -567,16 +568,16 @@ export function Home() {
               <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center mb-3 text-slate-400">
                 <Search className="w-5 h-5" />
               </div>
-              <p className="text-base font-semibold text-slate-900 mb-1">Keine Treffer gefunden</p>
+              <p className="text-base font-semibold text-slate-900 mb-1">{t('documents.noSearchResultsTitle')}</p>
               <p className="text-sm text-slate-500 max-w-sm mb-4 leading-relaxed">
-                Für „{debouncedQuery.trim()}“ wurden keine Übereinstimmungen im Text deiner verarbeiteten Dokumente gefunden.
+                {t('documents.noSearchResultsForQuery', { query: debouncedQuery.trim() })}
               </p>
               <Button
                 variant="secondary"
                 onClick={handleResetSearch}
                 className="h-8 px-3 text-xs"
               >
-                Suche zurücksetzen
+                {t('documents.resetSearch')}
               </Button>
             </div>
           ) : (
@@ -584,8 +585,8 @@ export function Home() {
               {searchResults.map((result) => {
                 const topic = topicsMap.get(result.topicId);
                 const subject = topic ? subjectsMap.get(topic.subjectId) : undefined;
-                const subjectName = subject?.name ?? 'Unbekanntes Fach';
-                const topicName = topic?.name ?? 'Unbekanntes Thema';
+                const subjectName = subject?.name ?? t('documents.unknownSubject');
+                const topicName = topic?.name ?? t('documents.unknownTopic');
 
                 return (
                   <button
@@ -612,7 +613,7 @@ export function Home() {
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <span className="px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-700 rounded-md">
-                          Seite {result.pageNumber}
+                          {t('documents.pageMatch', { page: result.pageNumber })}
                         </span>
                         <span
                           className={cn(
@@ -623,11 +624,11 @@ export function Home() {
                           )}
                           title={
                             result.source === 'native'
-                              ? 'Im nativen PDF-Text gefunden'
-                              : 'Im erkannten OCR-Text gefunden'
+                              ? t('documents.foundInNative')
+                              : t('documents.foundInOcr')
                           }
                         >
-                          {result.source === 'native' ? 'Textebene' : 'OCR'}
+                          {result.source === 'native' ? t('viewer.nativeText') : t('viewer.ocrText')}
                         </span>
                       </div>
                     </div>
@@ -651,11 +652,16 @@ export function Home() {
                     <GraduationCap className="w-4 h-4" />
                   </div>
                   <div className="min-w-0">
-                    <h2 className="text-sm font-semibold text-slate-900 leading-snug">Lernfortschritt</h2>
+                    <h2 className="text-sm font-semibold text-slate-900 leading-snug">{t('documents.learningProgress')}</h2>
                     <p className="text-xs text-slate-500">
                       {globalProgress.totalExercises > 0
-                        ? `${globalProgress.totalExercises} Übungen absolviert · ${globalProgress.accuracyPercentage}% Trefferquote · ${globalProgress.topicsLearnedCount} von ${globalProgress.totalTopicsCount} Themen gelernt`
-                        : 'Noch keine Übungen absolviert'}
+                        ? t('documents.progressSummary', {
+                            exercises: globalProgress.totalExercises,
+                            accuracy: globalProgress.accuracyPercentage ?? 0,
+                            learned: globalProgress.topicsLearnedCount,
+                            total: globalProgress.totalTopicsCount,
+                          })
+                        : t('documents.noExercisesYet')}
                     </p>
                   </div>
                 </div>
@@ -663,7 +669,7 @@ export function Home() {
                   to="/profile"
                   className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors self-start sm:self-center"
                 >
-                  <span>Lernstatistik ansehen</span>
+                  <span>{t('documents.viewStats')}</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </Link>
               </div>
@@ -695,7 +701,7 @@ export function Home() {
                                   : 'bg-white text-slate-500 border-slate-200',
                           )}
                         >
-                          {formatLearningStateLabel(prog.learningState)}
+                          {t(`learning.states.${prog.learningState}`, {}, formatLearningStateLabel(prog.learningState))}
                         </span>
                       </div>
                       <div className="h-1 bg-slate-200/80 rounded-full overflow-hidden mb-1.5">
@@ -714,8 +720,14 @@ export function Home() {
                         />
                       </div>
                       <div className="flex items-center justify-between text-[11px] text-slate-400">
-                        <span>{hasActivity ? `${prog.completedExercises} Übungen (${prog.accuracyPercentage}%)` : '0 Übungen'}</span>
-                        <span>{prog.topicsLearnedCount}/{prog.totalTopicsCount} Themen</span>
+                        <span>
+                          {hasActivity
+                            ? t('documents.exercisesWithAccuracy', { count: prog.completedExercises, accuracy: prog.accuracyPercentage ?? 0 })
+                            : t('documents.exercisesCount', { count: 0 })}
+                        </span>
+                        <span>
+                          {t('documents.topicsFraction', { learned: prog.topicsLearnedCount, total: prog.totalTopicsCount })}
+                        </span>
                       </div>
                     </button>
                   );
@@ -734,7 +746,7 @@ export function Home() {
                   type="text"
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="Dateiname filtern…"
+                  placeholder={t('documents.filterFilenamePlaceholder')}
                   className="w-full pl-9 pr-3 py-1.5 text-sm bg-slate-50/70 border border-slate-200/80 rounded-md focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 focus:bg-white text-slate-900 placeholder:text-slate-400 transition-[background-color,border-color,box-shadow] duration-150"
                 />
               </div>
@@ -754,7 +766,7 @@ export function Home() {
                       : "bg-slate-50/70 border-slate-200/80 focus:bg-white"
                   )}
                 >
-                  <option value="all">Alle Fächer ({subjects.length})</option>
+                  <option value="all">{t('documents.allSubjectsCount', { count: subjects.length })}</option>
                   {subjects.map(s => (
                     <option key={s.id} value={s.id}>
                       {s.name}
@@ -776,12 +788,12 @@ export function Home() {
                       : "bg-slate-50/70 border-slate-200/80 focus:bg-white"
                   )}
                 >
-                  <option value="all">Alle Themen ({availableTopics.length})</option>
-                  {availableTopics.map(t => {
-                    const subjectName = subjectsMap.get(t.subjectId)?.name;
-                    const label = selectedSubjectId === 'all' && subjectName ? `${subjectName} · ${t.name}` : t.name;
+                  <option value="all">{t('documents.allTopicsCount', { count: availableTopics.length })}</option>
+                  {availableTopics.map(tItem => {
+                    const subjectName = subjectsMap.get(tItem.subjectId)?.name;
+                    const label = selectedSubjectId === 'all' && subjectName ? `${subjectName} · ${tItem.name}` : tItem.name;
                     return (
-                      <option key={t.id} value={t.id}>
+                      <option key={tItem.id} value={tItem.id}>
                         {label}
                       </option>
                     );
@@ -794,7 +806,7 @@ export function Home() {
                   onClick={handleResetFilters}
                   className="px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-md transition-[background-color,color,transform] duration-150 active:scale-95 cursor-pointer self-start sm:self-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
                 >
-                  Filter zurücksetzen
+                  {t('documents.resetFilters')}
                 </button>
               )}
             </div>
@@ -806,9 +818,9 @@ export function Home() {
               <div className="w-12 h-12 bg-white shadow-2xs border border-slate-200/80 rounded-xl flex items-center justify-center mb-4 text-blue-600">
                 <FileText className="w-6 h-6" />
               </div>
-              <h3 className="text-base font-semibold text-slate-900 mb-1.5">Noch keine Dokumente</h3>
+              <h3 className="text-base font-semibold text-slate-900 mb-1.5">{t('documents.noDocumentsYet')}</h3>
               <p className="text-sm text-slate-500 max-w-md leading-relaxed">
-                Hier werden alle hochgeladenen PDF-Dateien aus deinen Fächern und Themen gesammelt. Lade oben ein Dokument hoch oder erstelle Fächer und Themen in der Navigation.
+                {t('documents.noDocumentsDesc')}
               </p>
             </div>
           ) : filteredDocuments.length === 0 ? (
@@ -816,16 +828,16 @@ export function Home() {
               <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center mb-3 text-slate-400">
                 <Search className="w-5 h-5" />
               </div>
-              <p className="text-base font-semibold text-slate-900 mb-1">Keine Dokumente gefunden</p>
+              <p className="text-base font-semibold text-slate-900 mb-1">{t('documents.emptyStateTitle')}</p>
               <p className="text-sm text-slate-500 max-w-sm mb-4 leading-relaxed">
-                Keine Unterlagen entsprechen den ausgewählten Filterkriterien.
+                {t('documents.noDocumentsMatchFilters')}
               </p>
               <Button
                 variant="secondary"
                 onClick={handleResetFilters}
                 className="h-8 px-3 text-xs"
               >
-                Filter zurücksetzen
+                {t('documents.resetFilters')}
               </Button>
             </div>
           ) : (
@@ -833,8 +845,8 @@ export function Home() {
               {filteredDocuments.map(doc => {
                 const topic = topicsMap.get(doc.topicId);
                 const subject = topic ? subjectsMap.get(topic.subjectId) : undefined;
-                const subjectName = subject?.name ?? 'Unbekanntes Fach';
-                const topicName = topic?.name ?? 'Unbekanntes Thema';
+                const subjectName = subject?.name ?? t('documents.unknownSubject');
+                const topicName = topic?.name ?? t('documents.unknownTopic');
                 const isOpenable = canOpenDocument(doc.processingStatus);
                 const progressText = processingProgress.get(doc.id);
                 const isProcessing = progressText !== undefined;
@@ -870,12 +882,12 @@ export function Home() {
                         {isProcessing ? (
                           <p className="text-xs text-blue-700 mt-1 flex items-center gap-1.5 font-medium">
                             <Loader2 className="w-3 h-3 shrink-0 animate-spin text-blue-600" />
-                            <span className="truncate">{progressText || 'Wird verarbeitet…'}</span>
+                            <span className="truncate">{progressText || t('viewer.processing')}</span>
                           </p>
                         ) : doc.processingStatus === 'failed' ? (
                           <p className="text-xs text-red-600 mt-1 flex items-center gap-1.5 font-medium">
                             <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                            Verarbeitung fehlgeschlagen
+                            {t('documents.failedProcessing')}
                           </p>
                         ) : isOpenable ? (
                           <div className="mt-1 space-y-1">
@@ -887,7 +899,7 @@ export function Home() {
                             {doc.understanding && (
                               <div className="flex flex-wrap items-center gap-1.5 min-w-0 max-w-full pt-0.5">
                                 <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-200/60 shrink-0">
-                                  {DOCUMENT_TYPE_LABELS[doc.understanding.documentType] ?? 'Dokument'}
+                                  {t(`documents.types.${doc.understanding.documentType}`, {}, DOCUMENT_TYPE_LABELS[doc.understanding.documentType] ?? t('infoModal.defaultType'))}
                                 </span>
                                 {doc.understanding.title && (
                                   <span className="text-[11px] text-slate-600 font-medium truncate max-w-[200px] sm:max-w-xs">
@@ -904,11 +916,11 @@ export function Home() {
                           // pretending the job is still running.
                           <p className="text-xs text-amber-700 mt-1 flex items-center gap-1.5 font-medium">
                             <AlertCircle className="w-3.5 h-3.5 shrink-0 text-amber-500" />
-                            Verarbeitung unterbrochen
+                            {t('documents.processingInterrupted')}
                           </p>
                         ) : (
                           <p className="text-xs text-slate-500 mt-1">
-                            Verarbeitung ausstehend
+                            {t('documents.processingPending')}
                           </p>
                         )}
                       </div>
@@ -919,8 +931,8 @@ export function Home() {
                         <button
                           onClick={() => setInspectingDoc(doc)}
                           className="p-1.5 sm:p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50/80 rounded-md transition-[background-color,color,transform] duration-150 active:scale-95 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
-                          title="Dokument-Übersicht & Analyse"
-                          aria-label="Dokument-Übersicht & Analyse"
+                          title={t('viewer.documentOverview')}
+                          aria-label={t('viewer.documentOverview')}
                         >
                           <Sparkles className={cn("w-4 h-4", doc.understanding ? "text-blue-600" : "")} />
                         </button>
@@ -930,8 +942,8 @@ export function Home() {
                           onClick={() => void startProcessing(doc.id)}
                           disabled={isProcessing}
                           className="p-1.5 sm:p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50/80 rounded-md transition-[background-color,color,transform] duration-150 active:scale-95 disabled:opacity-50 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
-                          title="Verarbeitung wiederholen"
-                          aria-label="Verarbeitung wiederholen"
+                          title={t('documents.retryProcessing')}
+                          aria-label={t('documents.retryProcessing')}
                         >
                           <RefreshCw className={cn("w-4 h-4", isProcessing && "animate-spin text-blue-600")} />
                         </button>
@@ -940,24 +952,24 @@ export function Home() {
                         onClick={() => isOpenable && handleOpenDocument(doc.id)}
                         disabled={!isOpenable}
                         className="p-1.5 sm:p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50/80 rounded-md transition-[background-color,color,transform] duration-150 active:scale-95 disabled:opacity-50 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
-                        title="Öffnen"
-                        aria-label="Öffnen"
+                        title={t('documents.open')}
+                        aria-label={t('documents.open')}
                       >
                         <ExternalLink className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => setRenamingDoc(doc)}
                         className="p-1.5 sm:p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-[background-color,color,transform] duration-150 active:scale-95 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
-                        title="Umbenennen"
-                        aria-label="Umbenennen"
+                        title={t('documents.rename')}
+                        aria-label={t('documents.rename')}
                       >
                         <Edit2 className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => setMovingDoc(doc)}
                         className="p-1.5 sm:p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-[background-color,color,transform] duration-150 active:scale-95 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
-                        title="Verschieben"
-                        aria-label="Verschieben"
+                        title={t('documents.move')}
+                        aria-label={t('documents.move')}
                       >
                         <FolderInput className="w-4 h-4" />
                       </button>
@@ -965,8 +977,8 @@ export function Home() {
                         onClick={() => setDocToDelete(doc)}
                         disabled={deletingDocId === doc.id}
                         className="p-1.5 sm:p-2 text-slate-400 hover:text-red-600 hover:bg-red-50/80 rounded-md transition-[background-color,color,transform] duration-150 active:scale-95 cursor-pointer disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
-                        title="Löschen"
-                        aria-label="Löschen"
+                        title={t('documents.delete')}
+                        aria-label={t('documents.delete')}
                       >
                         {deletingDocId === doc.id ? (
                           <Loader2 className="w-4 h-4 animate-spin text-red-600" />
@@ -988,10 +1000,10 @@ export function Home() {
         onClose={() => setRenamingDoc(null)}
         onSubmit={handleRenameDocument}
         initialName={renamingDoc?.originalName ?? ''}
-        title="Datei umbenennen"
-        submitLabel="Speichern"
-        placeholder="z.B. Mathematik Skript"
-        label="Dateiname"
+        title={t('dialogs.renameDocument.title')}
+        submitLabel={t('dialogs.renameDocument.submitLabel')}
+        placeholder={t('dialogs.renameDocument.placeholder')}
+        label={t('dialogs.common.nameLabel')}
         maxLength={255}
       />
 
@@ -1009,12 +1021,8 @@ export function Home() {
         isOpen={!!docToDelete}
         onClose={() => setDocToDelete(null)}
         onConfirm={() => handleDeleteDocument(docToDelete?.id ?? '')}
-        title="Dokument löschen?"
-        description={
-          <>
-            Das Dokument <span className="font-semibold text-slate-900">"{docToDelete?.originalName}"</span> wird dauerhaft gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.
-          </>
-        }
+        title={t('dialogs.deleteDocument.title')}
+        description={t('documents.deleteDocPrompt', { name: docToDelete?.originalName ?? '' })}
       />
 
       <DocumentInfoModal

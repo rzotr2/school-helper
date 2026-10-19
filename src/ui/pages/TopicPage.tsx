@@ -24,8 +24,10 @@ import { cn } from '../../shared/utils/cn';
 import { useAuth } from '../../infrastructure/auth/AuthContext';
 import { Subject, getSubjects } from '../../application/use-cases/subjects';
 import { Topic, getTopic, getAllTopics } from '../../application/use-cases/topics';
+import { useTranslation } from '../../shared/i18n/LanguageContext';
 
 export function TopicPage() {
+  const { t } = useTranslation();
   const { subjectId, topicId } = useParams<{ subjectId: string; topicId: string }>();
   const { user, isLoading: isAuthLoading } = useAuth();
   const navigate = useNavigate();
@@ -146,7 +148,7 @@ export function TopicPage() {
 
       } catch (error) {
         console.error("Failed to load topic data", error);
-        setError("Fehler beim Laden des Themas. Möglicherweise fehlen Berechtigungen.");
+        setError(t('topicPage.loadError'));
       } finally {
         setIsLoading(false);
       }
@@ -155,7 +157,7 @@ export function TopicPage() {
     if (!isAuthLoading) {
       loadData();
     }
-  }, [user, subjectId, topicId, navigate, isAuthLoading]);
+  }, [user, subjectId, topicId, navigate, isAuthLoading, t]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -180,7 +182,7 @@ export function TopicPage() {
       // 'pending'/'processing' status keeps the row busy across reloads.
       void startProcessing(newDoc.id);
     } catch (err: unknown) {
-      setUploadError(err instanceof Error ? err.message || 'Fehler beim Hochladen' : 'Fehler beim Hochladen');
+      setUploadError(err instanceof Error ? err.message || t('topicPage.uploadError') : t('topicPage.uploadError'));
     } finally {
       setIsUploading(false);
       setUploadProgress(0);
@@ -198,9 +200,9 @@ export function TopicPage() {
   if (error) {
     return (
       <div className="border-2 border-dashed border-red-200 rounded-xl p-12 flex flex-col items-center justify-center text-center bg-red-50/50">
-        <h3 className="text-sm font-medium text-red-900 mb-1">Ein Fehler ist aufgetreten</h3>
+        <h3 className="text-sm font-medium text-red-900 mb-1">{t('common.anErrorOccurred')}</h3>
         <p className="text-sm text-red-700">{error}</p>
-        <Link to="/" className="mt-4 text-blue-600 hover:underline">Zurück zur Übersicht</Link>
+        <Link to="/" className="mt-4 text-blue-600 hover:underline">{t('common.backToOverview')}</Link>
       </div>
     );
   }
@@ -210,7 +212,7 @@ export function TopicPage() {
   return (
     <div className="space-y-6">
       {/* Breadcrumb Navigation */}
-      <nav aria-label="Brotkrümel-Navigation" className="flex items-center gap-1.5 text-xs sm:text-sm text-slate-500 min-w-0">
+      <nav aria-label={t('topicPage.breadcrumbNav')} className="flex items-center gap-1.5 text-xs sm:text-sm text-slate-500 min-w-0">
         <Link 
           to={`/subject/${subject.id}`} 
           className="hover:text-blue-600 font-medium transition-colors truncate max-w-[140px] sm:max-w-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 rounded-sm"
@@ -230,7 +232,7 @@ export function TopicPage() {
           <div className="min-w-0">
             <h1 className="text-xl sm:text-2xl font-semibold text-slate-900 truncate leading-snug">{topic.name}</h1>
             <p className="text-xs text-slate-500 mt-0.5">
-              {documents.length === 1 ? '1 Dokument' : `${documents.length} Dokumente`} in diesem Thema
+              {t('topicPage.documentsCount', { count: documents.length })}
             </p>
           </div>
         </div>
@@ -255,7 +257,7 @@ export function TopicPage() {
             ) : (
               <Upload className="w-4 h-4 shrink-0" />
             )}
-            <span>{isUploading ? `Wird hochgeladen (${uploadProgress}%)` : 'Dokument hochladen'}</span>
+            <span>{isUploading ? t('topicPage.uploadingProgress', { progress: uploadProgress }) : t('topicPage.uploadBtn')}</span>
           </Button>
         </div>
       </div>
@@ -266,8 +268,8 @@ export function TopicPage() {
           <button
             onClick={() => setUploadError(null)}
             className="text-red-500 hover:text-red-700 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 rounded"
-            title="Schließen"
-            aria-label="Schließen"
+            title={t('common.close')}
+            aria-label={t('common.close')}
           >
             <X className="w-4 h-4" />
           </button>
@@ -283,8 +285,8 @@ export function TopicPage() {
           <button
             onClick={() => setActionError(null)}
             className="text-red-500 hover:text-red-700 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 rounded shrink-0"
-            title="Schließen"
-            aria-label="Schließen"
+            title={t('common.close')}
+            aria-label={t('common.close')}
           >
             <X className="w-4 h-4" />
           </button>
@@ -301,7 +303,7 @@ export function TopicPage() {
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h2 className="text-sm font-semibold text-slate-900">Lernfortschritt</h2>
+                  <h2 className="text-sm font-semibold text-slate-900">{t('topicPage.learningProgress')}</h2>
                   <span
                     className={cn(
                       'text-[11px] font-medium px-2 py-0.5 rounded border',
@@ -314,13 +316,17 @@ export function TopicPage() {
                             : 'bg-slate-50 text-slate-500 border-slate-200',
                     )}
                   >
-                    {formatLearningStateLabel(topicProgress.learningState)}
+                    {t(`learning.states.${topicProgress.learningState}` as any) || formatLearningStateLabel(topicProgress.learningState)}
                   </span>
                 </div>
                 <p className="text-xs text-slate-500 mt-0.5">
                   {topicProgress.completedExercises > 0
-                    ? `${topicProgress.completedExercises} Übungen absolviert · ${topicProgress.correctExercises} richtig · ${topicProgress.incorrectExercises} falsch`
-                    : 'Zu diesem Thema wurden noch keine Übungen absolviert.'}
+                    ? t('topicPage.exercisesCompletedSummary', {
+                        completed: topicProgress.completedExercises,
+                        correct: topicProgress.correctExercises,
+                        incorrect: topicProgress.incorrectExercises,
+                      })
+                    : t('topicPage.noExercisesYet')}
                 </p>
               </div>
             </div>
@@ -328,7 +334,7 @@ export function TopicPage() {
             <div className="flex items-center gap-3 self-end sm:self-center">
               {topicProgress.lastStudiedAt && (
                 <span className="text-[11px] text-slate-400 hidden md:inline">
-                  Zuletzt geübt: {formatRelativeDate(topicProgress.lastStudiedAt).dateLabel}
+                  {t('topicPage.lastStudied', { date: formatRelativeDate(topicProgress.lastStudiedAt).dateLabel })}
                 </span>
               )}
               <Link
@@ -336,7 +342,7 @@ export function TopicPage() {
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/80 rounded-lg text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
               >
                 <GraduationCap className="w-3.5 h-3.5" />
-                <span>{topicProgress.completedExercises > 0 ? 'Weiterlernen' : 'Jetzt lernen'}</span>
+                <span>{topicProgress.completedExercises > 0 ? t('topicPage.continueLearning') : t('topicPage.startLearning')}</span>
               </Link>
             </div>
           </div>
@@ -364,7 +370,7 @@ export function TopicPage() {
 
       <div>
         <div className="flex items-center justify-between mb-4 gap-2">
-          <h2 className="text-base sm:text-lg font-medium text-slate-900">Dokumente</h2>
+          <h2 className="text-base sm:text-lg font-medium text-slate-900">{t('topicPage.documentsHeading')}</h2>
         </div>
 
         {documents.length === 0 ? (
@@ -372,9 +378,9 @@ export function TopicPage() {
             <div className="w-12 h-12 bg-white shadow-2xs border border-slate-200/80 rounded-xl flex items-center justify-center mb-4 text-blue-600">
               <FileText className="w-6 h-6" />
             </div>
-            <h3 className="text-base font-semibold text-slate-900 mb-1.5">Noch keine Unterlagen</h3>
+            <h3 className="text-base font-semibold text-slate-900 mb-1.5">{t('topicPage.noDocsTitle')}</h3>
             <p className="text-sm text-slate-500 max-w-sm mb-4 leading-relaxed">
-              Lade dein erstes PDF-Dokument für dieses Thema hoch, um mit dem Lernen zu beginnen.
+              {t('topicPage.noDocsDesc')}
             </p>
             <Button
               variant="secondary"
@@ -383,7 +389,7 @@ export function TopicPage() {
               className="gap-2"
             >
               <Upload className="w-4 h-4" />
-              <span>Dokument hochladen</span>
+              <span>{t('topicPage.uploadBtn')}</span>
             </Button>
           </div>
         ) : (
@@ -419,12 +425,12 @@ export function TopicPage() {
                       {isProcessing ? (
                         <p className="text-xs text-blue-700 mt-1 flex items-center gap-1.5 font-medium">
                           <Loader2 className="w-3 h-3 shrink-0 animate-spin text-blue-600" />
-                          <span className="truncate">{progressText || 'Wird verarbeitet…'}</span>
+                          <span className="truncate">{progressText || t('topicPage.processing')}</span>
                         </p>
                       ) : doc.processingStatus === 'failed' ? (
                         <p className="text-xs text-red-600 mt-1 flex items-center gap-1.5 font-medium">
                           <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                          Verarbeitung fehlgeschlagen
+                          {t('topicPage.processingFailed')}
                         </p>
                       ) : isOpenable ? (
                         <div className="mt-1 space-y-1">
@@ -436,7 +442,7 @@ export function TopicPage() {
                           {doc.understanding && (
                             <div className="flex flex-wrap items-center gap-1.5 min-w-0 max-w-full pt-0.5">
                               <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-200/60 shrink-0">
-                                {DOCUMENT_TYPE_LABELS[doc.understanding.documentType] ?? 'Dokument'}
+                                {t(`documents.types.${doc.understanding.documentType}` as any) || DOCUMENT_TYPE_LABELS[doc.understanding.documentType] || t('documents.types.other')}
                               </span>
                               {doc.understanding.title && (
                                 <span className="text-[11px] text-slate-600 font-medium truncate max-w-[200px] sm:max-w-xs">
@@ -447,17 +453,13 @@ export function TopicPage() {
                           )}
                         </div>
                       ) : doc.processingStatus === 'processing' ? (
-                        // A persisted 'processing' row with no live run in this
-                        // session: the browser run that started it is gone
-                        // (reload). Show the recovery state instead of
-                        // pretending the job is still running.
                         <p className="text-xs text-amber-700 mt-1 flex items-center gap-1.5 font-medium">
                           <AlertCircle className="w-3.5 h-3.5 shrink-0 text-amber-500" />
-                          Verarbeitung unterbrochen
+                          {t('topicPage.processingInterrupted')}
                         </p>
                       ) : (
                         <p className="text-xs text-slate-500 mt-1">
-                          Verarbeitung ausstehend
+                          {t('topicPage.processingPending')}
                         </p>
                       )}
                     </div>
@@ -468,8 +470,8 @@ export function TopicPage() {
                       <button
                         onClick={() => setInspectingDoc(doc)}
                         className="p-1.5 sm:p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50/80 rounded-md transition-[background-color,color,transform] duration-150 active:scale-95 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
-                        title="Dokument-Übersicht & Analyse"
-                        aria-label="Dokument-Übersicht & Analyse"
+                        title={t('topicPage.actionOverviewAndAnalysis')}
+                        aria-label={t('topicPage.actionOverviewAndAnalysis')}
                       >
                         <Sparkles className={cn("w-4 h-4", doc.understanding ? "text-blue-600" : "")} />
                       </button>
@@ -479,8 +481,8 @@ export function TopicPage() {
                         onClick={() => void startProcessing(doc.id)}
                         disabled={isProcessing}
                         className="p-1.5 sm:p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50/80 rounded-md transition-[background-color,color,transform] duration-150 active:scale-95 disabled:opacity-50 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
-                        title="Verarbeitung wiederholen"
-                        aria-label="Verarbeitung wiederholen"
+                        title={t('topicPage.actionRetryProcessing')}
+                        aria-label={t('topicPage.actionRetryProcessing')}
                       >
                         <RefreshCw className={cn("w-4 h-4", isProcessing && "animate-spin text-blue-600")} />
                       </button>
@@ -489,24 +491,24 @@ export function TopicPage() {
                       onClick={() => isOpenable && handleOpenDocument(doc.id)}
                       disabled={!isOpenable}
                       className="p-1.5 sm:p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50/80 rounded-md transition-[background-color,color,transform] duration-150 active:scale-95 disabled:opacity-50 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
-                      title="Öffnen"
-                      aria-label="Öffnen"
+                      title={t('topicPage.actionOpen')}
+                      aria-label={t('topicPage.actionOpen')}
                     >
                       <ExternalLink className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => setRenamingDoc(doc)}
                       className="p-1.5 sm:p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-[background-color,color,transform] duration-150 active:scale-95 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
-                      title="Umbenennen"
-                      aria-label="Umbenennen"
+                      title={t('topicPage.actionRename')}
+                      aria-label={t('topicPage.actionRename')}
                     >
                       <Edit2 className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => setMovingDoc(doc)}
                       className="p-1.5 sm:p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-[background-color,color,transform] duration-150 active:scale-95 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
-                      title="Verschieben"
-                      aria-label="Verschieben"
+                      title={t('topicPage.actionMove')}
+                      aria-label={t('topicPage.actionMove')}
                     >
                       <FolderInput className="w-4 h-4" />
                     </button>
@@ -514,8 +516,8 @@ export function TopicPage() {
                       onClick={() => setDocToDelete(doc)}
                       disabled={deletingDocId === doc.id}
                       className="p-1.5 sm:p-2 text-slate-400 hover:text-red-600 hover:bg-red-50/80 rounded-md transition-[background-color,color,transform] duration-150 active:scale-95 cursor-pointer disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
-                      title="Löschen"
-                      aria-label="Löschen"
+                      title={t('topicPage.actionDelete')}
+                      aria-label={t('topicPage.actionDelete')}
                     >
                       {deletingDocId === doc.id ? (
                         <Loader2 className="w-4 h-4 animate-spin text-red-600" />
@@ -536,10 +538,10 @@ export function TopicPage() {
         onClose={() => setRenamingDoc(null)}
         onSubmit={handleRenameDocument}
         initialName={renamingDoc?.originalName ?? ''}
-        title="Datei umbenennen"
-        submitLabel="Speichern"
-        placeholder="z.B. Mathematik Skript"
-        label="Dateiname"
+        title={t('dialogs.renameDocument.title')}
+        submitLabel={t('dialogs.renameDocument.submitLabel')}
+        placeholder={t('dialogs.renameDocument.placeholder')}
+        label={t('dialogs.renameDocument.filenameLabel')}
         maxLength={255}
       />
 
@@ -557,12 +559,8 @@ export function TopicPage() {
         isOpen={!!docToDelete}
         onClose={() => setDocToDelete(null)}
         onConfirm={() => handleDeleteDocument(docToDelete?.id ?? '')}
-        title="Dokument löschen?"
-        description={
-          <>
-            Das Dokument <span className="font-semibold text-slate-900">"{docToDelete?.originalName}"</span> wird dauerhaft gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.
-          </>
-        }
+        title={t('dialogs.deleteDocument.title')}
+        description={t('dialogs.deleteDocument.descriptionWithName', { name: docToDelete?.originalName ?? '' })}
       />
 
       <DocumentInfoModal

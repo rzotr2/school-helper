@@ -72,14 +72,14 @@ describe('Sidebar component expandable navigation', () => {
 
     // PuG Bedacht has topics -> chevron button exists
     const expandBtn = Array.from(container.querySelectorAll('button')).find((btn) =>
-      btn.getAttribute('aria-label')?.includes('PuG Bedacht Themen'),
+      btn.getAttribute('aria-label')?.includes('PuG Bedacht'),
     );
     expect(expandBtn).toBeDefined();
     expect(expandBtn?.getAttribute('aria-expanded')).toBe('false');
 
     // Deutsch has 0 topics -> no expand button
     const deutschExpandBtn = Array.from(container.querySelectorAll('button')).find((btn) =>
-      btn.getAttribute('aria-label')?.includes('Deutsch Themen'),
+      btn.getAttribute('aria-label')?.includes('Deutsch'),
     );
     expect(deutschExpandBtn).toBeUndefined();
 
@@ -92,7 +92,7 @@ describe('Sidebar component expandable navigation', () => {
     await renderComponent();
 
     const expandBtn = Array.from(container.querySelectorAll('button')).find((btn) =>
-      btn.getAttribute('aria-label')?.includes('PuG Bedacht Themen'),
+      btn.getAttribute('aria-label')?.includes('PuG Bedacht'),
     );
     expect(expandBtn).toBeDefined();
 

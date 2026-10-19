@@ -16,8 +16,10 @@ import { cn } from '../../shared/utils/cn';
 import { Button } from '../components/Button';
 import { NameDialog } from '../components/NameDialog';
 import { DeleteDialog } from '../components/DeleteDialog';
+import { useTranslation } from '../../shared/i18n';
 
 export function SubjectPage() {
+  const { t } = useTranslation();
   const { subjectId } = useParams<{ subjectId: string }>();
   const { user, isLoading: isAuthLoading } = useAuth();
   const navigate = useNavigate();
@@ -53,7 +55,7 @@ export function SubjectPage() {
       }
     } catch (error) {
       console.error("Failed to load subject data", error);
-      setError("Fehler beim Laden der Fachdaten. Möglicherweise fehlen Berechtigungen.");
+      setError(t('subjectPage.loadError'));
     } finally {
       setIsLoading(false);
     }
@@ -80,7 +82,7 @@ export function SubjectPage() {
       navigate('/', { replace: true });
     } catch (err: unknown) {
       console.error("Failed to delete subject", err);
-      setError("Fehler beim Löschen des Fachs. Bitte erneut versuchen.");
+      setError(t('subjectPage.deleteError'));
       setIsDeleteDialogOpen(false);
     }
   };
@@ -106,7 +108,7 @@ export function SubjectPage() {
       await loadData();
     } catch (err: unknown) {
       console.error("Failed to delete topic", err);
-      setError("Fehler beim Löschen des Themas. Bitte erneut versuchen.");
+      setError(t('subjectPage.deleteTopicError'));
       setDeletingTopic(null);
     }
   };
@@ -122,7 +124,7 @@ export function SubjectPage() {
   if (error) {
     return (
       <div className="border-2 border-dashed border-red-200 rounded-xl p-12 flex flex-col items-center justify-center text-center bg-red-50/50">
-        <h3 className="text-sm font-medium text-red-900 mb-1">Ein Fehler ist aufgetreten</h3>
+        <h3 className="text-sm font-medium text-red-900 mb-1">{t('dialogs.common.genericError')}</h3>
         <p className="text-sm text-red-700">{error}</p>
       </div>
     );
@@ -142,13 +144,13 @@ export function SubjectPage() {
             <h1 className="text-xl sm:text-2xl font-semibold text-slate-900 truncate leading-snug">{subject.name}</h1>
             <div className="flex flex-wrap items-center gap-2 mt-0.5">
               <p className="text-xs text-slate-500">
-                {topics.length === 1 ? '1 Thema' : `${topics.length} Themen`} in diesem Fach
+                {t('subjectPage.topicsCount', { count: topics.length })}
               </p>
               {subjectProgress && subjectProgress.completedExercises > 0 && (
                 <>
                   <span className="text-slate-300 text-xs">·</span>
                   <span className="text-xs text-slate-600 font-medium">
-                    {subjectProgress.completedExercises} Übungen ({subjectProgress.accuracyPercentage}%)
+                    {t('documents.exercisesWithAccuracy', { count: subjectProgress.completedExercises, accuracy: subjectProgress.accuracyPercentage ?? 0 })}
                   </span>
                   <span
                     className={cn(
@@ -160,7 +162,7 @@ export function SubjectPage() {
                           : 'bg-rose-50 text-rose-700 border-rose-200',
                     )}
                   >
-                    {formatLearningStateLabel(subjectProgress.learningState)}
+                    {t(`learning.states.${subjectProgress.learningState}`, {}, formatLearningStateLabel(subjectProgress.learningState))}
                   </span>
                 </>
               )}
@@ -174,13 +176,13 @@ export function SubjectPage() {
             className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/80 rounded-lg text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
           >
             <GraduationCap className="w-3.5 h-3.5" />
-            <span>Fach üben</span>
+            <span>{t('subjectPage.practiceSubject')}</span>
           </Link>
           <Button variant="secondary" onClick={() => setIsEditDialogOpen(true)} className="gap-2">
             <Edit2 className="w-4 h-4" />
-            <span>Umbenennen</span>
+            <span>{t('subjectPage.rename')}</span>
           </Button>
-          <Button variant="ghost" onClick={() => setIsDeleteDialogOpen(true)} aria-label="Fach löschen" className="text-slate-400 hover:text-red-600 hover:bg-red-50/80 px-2.5">
+          <Button variant="ghost" onClick={() => setIsDeleteDialogOpen(true)} aria-label={t('subjectPage.deleteSubjectBtn')} className="text-slate-400 hover:text-red-600 hover:bg-red-50/80 px-2.5">
             <Trash2 className="w-4 h-4" />
           </Button>
         </div>
@@ -188,10 +190,10 @@ export function SubjectPage() {
 
       <div>
         <div className="flex items-center justify-between mb-4 gap-2">
-          <h2 className="text-base sm:text-lg font-medium text-slate-900">Themen</h2>
+          <h2 className="text-base sm:text-lg font-medium text-slate-900">{t('subjectPage.topicsTitle')}</h2>
           <Button onClick={() => setIsAddTopicDialogOpen(true)} className="gap-2 shrink-0">
             <Plus className="w-4 h-4" />
-            <span>Thema erstellen</span>
+            <span>{t('subjectPage.createTopic')}</span>
           </Button>
         </div>
 
@@ -200,13 +202,13 @@ export function SubjectPage() {
             <div className="w-12 h-12 bg-white shadow-2xs border border-slate-200/80 rounded-xl flex items-center justify-center mb-4 text-blue-600">
               <Folder className="w-6 h-6" />
             </div>
-            <h3 className="text-base font-semibold text-slate-900 mb-1.5">Noch keine Themen</h3>
+            <h3 className="text-base font-semibold text-slate-900 mb-1.5">{t('subjectPage.noTopicsYet')}</h3>
             <p className="text-sm text-slate-500 max-w-sm mb-4 leading-relaxed">
-              Erstelle ein Thema, um deine Unterlagen und Dokumente für dieses Fach zu organisieren.
+              {t('subjectPage.noTopicsDesc')}
             </p>
             <Button variant="secondary" onClick={() => setIsAddTopicDialogOpen(true)} className="gap-2">
               <Plus className="w-4 h-4" />
-              <span>Thema erstellen</span>
+              <span>{t('subjectPage.createTopic')}</span>
             </Button>
           </div>
         ) : (
@@ -244,19 +246,19 @@ export function SubjectPage() {
                                   : 'bg-slate-50 text-slate-500 border-slate-200',
                           )}
                         >
-                          {formatLearningStateLabel(topicProg.learningState)}
+                          {t(`learning.states.${topicProg.learningState}`, {}, formatLearningStateLabel(topicProg.learningState))}
                         </span>
                       )}
                     </div>
                     <div className="flex items-center gap-2 mt-0.5">
                       <span className="text-xs text-slate-400 block truncate">
-                        Thema öffnen & Unterlagen ansehen
+                        {t('subjectPage.openTopicCard')}
                       </span>
                       {topicProg && topicProg.completedExercises > 0 && (
                         <>
                           <span className="text-slate-300 text-xs hidden sm:inline">·</span>
                           <span className="text-xs text-slate-500 hidden sm:inline truncate">
-                            {topicProg.completedExercises} Übungen ({topicProg.accuracyPercentage}%)
+                            {t('documents.exercisesWithAccuracy', { count: topicProg.completedExercises, accuracy: topicProg.accuracyPercentage ?? 0 })}
                           </span>
                         </>
                       )}
@@ -272,8 +274,8 @@ export function SubjectPage() {
                       e.stopPropagation();
                       setEditingTopic(topic);
                     }}
-                    aria-label={`Thema "${topic.name}" umbenennen`}
-                    title="Umbenennen"
+                    aria-label={t('subjectPage.renameTopicAria', { name: topic.name })}
+                    title={t('subjectPage.rename')}
                     className="p-1.5 sm:p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-[background-color,color,transform] duration-150 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 cursor-pointer"
                   >
                     <Edit2 className="w-4 h-4" />
@@ -284,8 +286,8 @@ export function SubjectPage() {
                       e.stopPropagation();
                       setDeletingTopic(topic);
                     }}
-                    aria-label={`Thema "${topic.name}" löschen`}
-                    title="Löschen"
+                    aria-label={t('subjectPage.deleteTopicAria', { name: topic.name })}
+                    title={t('subjectPage.delete')}
                     className="p-1.5 sm:p-2 text-slate-400 hover:text-red-600 hover:bg-red-50/80 rounded-md transition-[background-color,color,transform] duration-150 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 cursor-pointer"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -302,31 +304,27 @@ export function SubjectPage() {
         isOpen={isEditDialogOpen}
         onClose={() => setIsEditDialogOpen(false)}
         onSubmit={handleEditSubject}
-        title="Fach umbenennen"
-        submitLabel="Speichern"
+        title={t('dialogs.editSubject.title')}
+        submitLabel={t('dialogs.editSubject.submitLabel')}
         initialName={subject.name}
-        placeholder="z.B. Fachkunde"
+        placeholder={t('dialogs.editSubject.placeholder')}
       />
 
       <DeleteDialog
         isOpen={isDeleteDialogOpen}
         onClose={() => setIsDeleteDialogOpen(false)}
         onConfirm={handleDeleteSubject}
-        title="Fach löschen?"
-        description={
-          <>
-            Das Fach <span className="font-semibold text-slate-900">"{subject.name}"</span> und alle zugehörigen Themen werden gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.
-          </>
-        }
+        title={t('dialogs.deleteSubject.title')}
+        description={t('subjectPage.deleteSubjectPrompt', { name: subject.name })}
       />
 
       <NameDialog
         isOpen={isAddTopicDialogOpen}
         onClose={() => setIsAddTopicDialogOpen(false)}
         onSubmit={handleAddTopic}
-        title="Neues Thema"
-        submitLabel="Thema erstellen"
-        placeholder="z.B. Lernfeld 1"
+        title={t('dialogs.newTopic.title')}
+        submitLabel={t('dialogs.newTopic.submitLabel')}
+        placeholder={t('dialogs.newTopic.placeholder')}
       />
 
       {editingTopic && (
@@ -334,10 +332,10 @@ export function SubjectPage() {
           isOpen={true}
           onClose={() => setEditingTopic(null)}
           onSubmit={handleEditTopic}
-          title="Thema umbenennen"
-          submitLabel="Speichern"
+          title={t('subjectPage.editTopicTitle')}
+          submitLabel={t('dialogs.editTopic.submitLabel')}
           initialName={editingTopic.name}
-          placeholder="z.B. Lernfeld 1"
+          placeholder={t('dialogs.editTopic.placeholder')}
         />
       )}
 
@@ -346,12 +344,8 @@ export function SubjectPage() {
           isOpen={true}
           onClose={() => setDeletingTopic(null)}
           onConfirm={handleDeleteTopic}
-          title="Thema löschen?"
-          description={
-            <>
-              Das Thema <span className="font-semibold text-slate-900">"{deletingTopic.name}"</span> wird dauerhaft gelöscht.
-            </>
-          }
+          title={t('dialogs.deleteTopic.title')}
+          description={t('subjectPage.deleteTopicPrompt', { name: deletingTopic.name })}
         />
       )}
     </div>

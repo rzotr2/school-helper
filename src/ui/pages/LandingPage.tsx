@@ -7,16 +7,19 @@ import { LearnShowcaseSection } from '../components/landing/LearnShowcaseSection
 import { TrustSection } from '../components/landing/TrustSection';
 import { FinalCtaSection } from '../components/landing/FinalCtaSection';
 import { LandingFooter } from '../components/landing/LandingFooter';
+import { useTranslation } from '../../shared/i18n';
 
 export function LandingPage() {
+  const { t } = useTranslation();
+
   useEffect(() => {
     // Set landing page document title
     const originalTitle = document.title;
-    document.title = 'Materia — Digitaler Schul-Workspace';
+    document.title = t('landing.title');
     return () => {
       document.title = originalTitle;
     };
-  }, []);
+  }, [t]);
 
   return (
     <div className="min-h-screen bg-[#FDFEFE] text-slate-900 font-sans selection:bg-blue-100 selection:text-blue-900">

@@ -4,6 +4,7 @@ import { ChevronRight, Layers, ExternalLink, Loader2, MessageSquare } from 'luci
 import type { DocumentContent } from '../../../application/use-cases/documentContent';
 import { getDocumentSections } from '../../../application/use-cases/documentContent';
 import { cn } from '../../../shared/utils/cn';
+import { useTranslation } from '../../../shared/i18n';
 
 export interface DocumentStructureProps {
   /** The typed document content containing pages and optional sections. */
@@ -35,6 +36,7 @@ export function DocumentStructure({
   isLoading = false,
   className,
 }: DocumentStructureProps) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const sections = getDocumentSections(content ?? null);
 
@@ -71,7 +73,7 @@ export function DocumentStructure({
       <div className={cn('p-4 bg-slate-50/80 border border-slate-200 rounded-lg text-xs text-slate-500', className)}>
         <div className="flex items-center gap-2">
           <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
-          <span>Lade Dokumentstruktur…</span>
+          <span>{t('structure.loading')}</span>
         </div>
       </div>
     );
@@ -91,12 +93,12 @@ export function DocumentStructure({
       <div className={cn('p-4 bg-slate-50/80 border border-slate-200 rounded-lg text-xs text-slate-600', className)}>
         <div className="flex items-center gap-2 mb-1 text-slate-700 font-medium">
           <Layers className="w-4 h-4 text-slate-400" />
-          <span>Dokumentstruktur</span>
+          <span>{t('structure.title')}</span>
         </div>
         <p className="text-slate-500 pl-6">
           {isOcrOnly
-            ? 'Für dieses Dokument konnte keine native PDF-Struktur ermittelt werden.'
-            : 'Für dieses Dokument ist noch keine Struktur verfügbar.'}
+            ? t('structure.noNativeStructure')
+            : t('structure.noStructureAvailable')}
         </p>
       </div>
     );
@@ -108,7 +110,7 @@ export function DocumentStructure({
         <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
           <Layers className="w-3.5 h-3.5 text-slate-400" />
           <span>
-            Dokumentstruktur ({sections.length} {sections.length === 1 ? 'Abschnitt' : 'Abschnitte'})
+            {t('structure.sectionsCount', { count: sections.length })}
           </span>
         </h4>
       </div>
@@ -116,11 +118,11 @@ export function DocumentStructure({
       <div className="divide-y divide-slate-200 border border-slate-200 rounded-lg bg-white overflow-hidden shadow-2xs">
         {sections.map((section, index) => {
           const isExpanded = expandedIndices.has(index);
-          const displayTitle = section.title?.trim() || 'Allgemeiner Inhalt';
+          const displayTitle = section.title?.trim() || t('structure.generalContent');
           const pageLabel =
             section.pageStart === section.pageEnd
-              ? `Seite ${section.pageStart}`
-              : `Seiten ${section.pageStart}–${section.pageEnd}`;
+              ? t('structure.pageSingle', { page: section.pageStart })
+              : t('structure.pageRange', { start: section.pageStart, end: section.pageEnd });
 
           const isNavigable = Boolean(onNavigateToPage || documentId);
 
@@ -161,7 +163,7 @@ export function DocumentStructure({
                         }
                       }}
                       className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-100/60 px-1.5 py-0.5 rounded transition-[background-color,color] duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
-                      title={`Zu Seite ${section.pageStart} springen`}
+                      title={t('structure.jumpToPage', { page: section.pageStart })}
                     >
                       <ExternalLink className="w-3 h-3 opacity-60" />
                       <span>{pageLabel}</span>
@@ -184,7 +186,7 @@ export function DocumentStructure({
                             >
                               <div className="flex items-center gap-1.5 text-[10px] font-semibold text-amber-700 tracking-wide uppercase">
                                 <MessageSquare className="w-3 h-3 text-amber-600" />
-                                <span>Anmerkung ({item.annotation.type})</span>
+                                <span>{t('structure.annotation', { type: item.annotation.type })}</span>
                               </div>
                               <p className="text-xs text-amber-950 whitespace-pre-line">
                                 {item.annotation.content}

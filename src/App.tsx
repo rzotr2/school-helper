@@ -13,6 +13,7 @@ import { LearnPage } from './ui/pages/LearnPage';
 import { ProfilePage } from './ui/pages/ProfilePage';
 import { LandingPage } from './ui/pages/LandingPage';
 import { AuthProvider, useAuth } from './infrastructure/auth/AuthContext';
+import { LanguageProvider } from './shared/i18n/LanguageContext';
 
 // Lazy-loaded so the main bundle doesn't pay for pdf.js + Tesseract.js:
 // the document viewer and the inspection development tool are optional flows.
@@ -51,54 +52,56 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          {/* Public landing route directly accessible */}
-          <Route path="landing" element={<LandingPage />} />
+    <LanguageProvider>
+      <AuthProvider>
+        <BrowserRouter>
+          <Routes>
+            {/* Public landing route directly accessible */}
+            <Route path="landing" element={<LandingPage />} />
 
-          {/* Authenticated workspace routes */}
-          <Route path="/" element={<RequireAuth><MainLayout /></RequireAuth>}>
-            <Route index element={<Home />} />
-            <Route path="learn" element={<LearnPage />} />
-            <Route path="profile" element={<ProfilePage />} />
-            <Route path="subject/:subjectId" element={<SubjectPage />} />
-            <Route path="subject/:subjectId/topic/:topicId" element={<TopicPage />} />
-            <Route
-              path="document/:documentId"
-              element={
-                <Suspense
-                  fallback={
-                    <div className="flex items-center justify-center min-h-[400px]">
-                      <div className="w-8 h-8 rounded-full border-2 border-slate-200 border-t-blue-600 animate-spin" />
-                    </div>
-                  }
-                >
-                  <DocumentViewerPage />
-                </Suspense>
-              }
-            />
-            {/* Development tool for the local PDF inspection pipeline (not in the sidebar). */}
-            <Route
-              path="pdf-inspect"
-              element={
-                <Suspense
-                  fallback={
-                    <div className="flex items-center justify-center min-h-[400px]">
-                      <div className="w-8 h-8 rounded-full border-2 border-slate-200 border-t-blue-600 animate-spin" />
-                    </div>
-                  }
-                >
-                  <PdfInspectPage />
-                </Suspense>
-              }
-            />
-          </Route>
+            {/* Authenticated workspace routes */}
+            <Route path="/" element={<RequireAuth><MainLayout /></RequireAuth>}>
+              <Route index element={<Home />} />
+              <Route path="learn" element={<LearnPage />} />
+              <Route path="profile" element={<ProfilePage />} />
+              <Route path="subject/:subjectId" element={<SubjectPage />} />
+              <Route path="subject/:subjectId/topic/:topicId" element={<TopicPage />} />
+              <Route
+                path="document/:documentId"
+                element={
+                  <Suspense
+                    fallback={
+                      <div className="flex items-center justify-center min-h-[400px]">
+                        <div className="w-8 h-8 rounded-full border-2 border-slate-200 border-t-blue-600 animate-spin" />
+                      </div>
+                    }
+                  >
+                    <DocumentViewerPage />
+                  </Suspense>
+                }
+              />
+              {/* Development tool for the local PDF inspection pipeline (not in the sidebar). */}
+              <Route
+                path="pdf-inspect"
+                element={
+                  <Suspense
+                    fallback={
+                      <div className="flex items-center justify-center min-h-[400px]">
+                        <div className="w-8 h-8 rounded-full border-2 border-slate-200 border-t-blue-600 animate-spin" />
+                      </div>
+                    }
+                  >
+                    <PdfInspectPage />
+                  </Suspense>
+                }
+              />
+            </Route>
 
-          {/* Catch-all fallback */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </BrowserRouter>
-    </AuthProvider>
+            {/* Catch-all fallback */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </BrowserRouter>
+      </AuthProvider>
+    </LanguageProvider>
   );
 }

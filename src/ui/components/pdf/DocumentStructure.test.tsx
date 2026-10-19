@@ -81,11 +81,11 @@ describe('DocumentStructure component', () => {
   it('renders sections with titles and page ranges, with first section expanded by default', async () => {
     await renderComponent(<DocumentStructure content={sampleContent} />);
 
-    expect(container.textContent).toContain('Dokumentstruktur (2 Abschnitte)');
+    expect(container.textContent).toContain('Document structure (2 Sections)');
     expect(container.textContent).toContain('IT-Dienstleistungen');
     expect(container.textContent).toContain('Cloud-Management');
-    expect(container.textContent).toContain('Seite 1');
-    expect(container.textContent).toContain('Seite 2');
+    expect(container.textContent).toContain('Page 1');
+    expect(container.textContent).toContain('Page 2');
 
     // First section is expanded: its content is visible
     expect(container.textContent).toContain('Einleitung in Dienstleistungen.');
@@ -131,8 +131,8 @@ describe('DocumentStructure component', () => {
 
     await renderComponent(<DocumentStructure content={untitledContent} />);
 
-    expect(container.textContent).toContain('Allgemeiner Inhalt');
-    expect(container.textContent).toContain('Seiten 1–3');
+    expect(container.textContent).toContain('General content');
+    expect(container.textContent).toContain('Pages 1–3');
     expect(container.textContent).toContain('Text ohne Überschrift');
   });
 
@@ -151,7 +151,7 @@ describe('DocumentStructure component', () => {
 
     await renderComponent(<DocumentStructure content={legacyContent} />);
 
-    expect(container.textContent).toContain('Für dieses Dokument ist noch keine Struktur verfügbar.');
+    expect(container.textContent).toContain('No structure is available for this document yet.');
   });
 
   it('shows neutral OCR-only message for scanned documents without native text blocks', async () => {
@@ -169,7 +169,7 @@ describe('DocumentStructure component', () => {
 
     await renderComponent(<DocumentStructure content={ocrOnlyContent} />);
 
-    expect(container.textContent).toContain('Für dieses Dokument konnte keine native PDF-Struktur ermittelt werden.');
+    expect(container.textContent).toContain('No native PDF structure could be determined for this document.');
   });
 
   it('invokes onNavigateToPage when page reference is clicked', async () => {
@@ -191,7 +191,7 @@ describe('DocumentStructure component', () => {
   it('renders loading state when isLoading is true', async () => {
     await renderComponent(<DocumentStructure content={null} isLoading={true} />);
 
-    expect(container.textContent).toContain('Lade Dokumentstruktur…');
+    expect(container.textContent).toContain('Loading document structure…');
   });
 
   it('renders interleaved annotation items with proper styling badge', async () => {
@@ -233,7 +233,7 @@ describe('DocumentStructure component', () => {
     await renderComponent(<DocumentStructure content={annotatedContent} />);
 
     expect(container.textContent).toContain('Aufgabenstellung');
-    expect(container.textContent).toContain('Anmerkung (TEXT)');
+    expect(container.textContent).toContain('Annotation (TEXT)');
     expect(container.textContent).toContain('Handschriftliche Notiz des Schülers');
     expect(container.textContent).toContain('Bitte beantworten.');
   });

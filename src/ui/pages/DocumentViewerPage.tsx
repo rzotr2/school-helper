@@ -40,6 +40,7 @@ import type {
 import { Button } from '../components/Button';
 import { PdfViewer } from '../components/pdf/PdfViewer';
 import { describeViewerError, withPageOcrUpdate } from '../components/pdf/viewerState';
+import { useTranslation } from '../../shared/i18n';
 
 interface ViewerSession {
   document: Document;
@@ -49,6 +50,7 @@ interface ViewerSession {
 }
 
 export function DocumentViewerPage() {
+  const { t } = useTranslation();
   const { documentId } = useParams<{ documentId: string }>();
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
@@ -201,11 +203,11 @@ export function DocumentViewerPage() {
       // even if the failure write itself failed (the DB may still say
       // 'processing' — retry is the recovery path either way).
       setProcessingStatus('failed');
-      setErrorMessage(err instanceof Error ? err.message : 'Verarbeitung fehlgeschlagen');
+      setErrorMessage(err instanceof Error ? err.message : t('viewer.processingFailed'));
     } finally {
       setRetryRunning(false);
     }
-  }, [userId, documentId, retryRunning]);
+  }, [userId, documentId, retryRunning, t]);
 
   /**
    * Runs explicit OCR for one page (triggered from the viewer's text
@@ -315,7 +317,7 @@ export function DocumentViewerPage() {
         if (ocrControllerRef.current === controller) ocrControllerRef.current = null;
       }
     },
-    [session],
+    [session, userId, documentId],
   );
 
   const handleClose = () => {
@@ -380,7 +382,7 @@ export function DocumentViewerPage() {
             <div className="p-4 bg-red-50 text-red-700 rounded-lg text-sm border border-red-200 flex items-center gap-2.5">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span>
-                {errorMessage ?? 'Die Verarbeitung dieses Dokuments ist fehlgeschlagen.'}
+                {errorMessage ?? t('viewer.processingFailed')}
               </span>
             </div>
             <div className="flex items-center gap-2">
@@ -392,14 +394,14 @@ export function DocumentViewerPage() {
                 {retryRunning ? (
                   <span className="flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    Wird verarbeitet…
+                    {t('viewer.processing')}
                   </span>
                 ) : (
-                  'Verarbeitung wiederholen'
+                  t('viewer.retryProcessing')
                 )}
               </Button>
               <Button variant="secondary" onClick={handleClose}>
-                Zurück
+                {t('viewer.back')}
               </Button>
             </div>
           </div>
@@ -420,13 +422,13 @@ export function DocumentViewerPage() {
             {retryActive ? (
               <>
                 <Loader2 className="w-5 h-5 shrink-0 animate-spin" />
-                <span className="text-sm">{progressText ?? 'Wird verarbeitet…'}</span>
+                <span className="text-sm">{progressText ?? t('viewer.processing')}</span>
               </>
             ) : (
               <>
                 <AlertCircle className="w-5 h-5 shrink-0" />
                 <span className="text-sm">
-                  Die Verarbeitung dieses Dokuments ist noch nicht abgeschlossen.
+                  {t('viewer.processingNotComplete')}
                 </span>
               </>
             )}
@@ -440,14 +442,14 @@ export function DocumentViewerPage() {
               {retryRunning ? (
                 <span className="flex items-center gap-2">
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Wird verarbeitet…
+                  {t('viewer.processing')}
                 </span>
               ) : (
-                'Verarbeitung wiederholen'
+                t('viewer.retryProcessing')
               )}
             </Button>
             <Button variant="secondary" onClick={handleClose}>
-              Zurück
+              {t('viewer.back')}
             </Button>
           </div>
         </div>
@@ -464,7 +466,7 @@ export function DocumentViewerPage() {
           {errorMessage}
         </div>
         <Button variant="secondary" onClick={handleClose}>
-          Zurück
+          {t('viewer.back')}
         </Button>
       </div>
     );
@@ -474,7 +476,7 @@ export function DocumentViewerPage() {
     <div className="flex items-center justify-center min-h-[400px]">
       <div className="flex flex-col items-center gap-3 text-slate-500">
         <Loader2 className="w-6 h-6 animate-spin" />
-        <span className="text-sm">{progressText ?? 'Dokument wird geladen …'}</span>
+        <span className="text-sm">{progressText ?? t('viewer.loadingDocument')}</span>
       </div>
     </div>
   );

@@ -1,7 +1,9 @@
 import React from 'react';
 import logoUrl from '../../../assets/logo.png';
+import { useTranslation } from '../../../shared/i18n';
 
 export function LandingFooter() {
+  const { t } = useTranslation();
   const currentYear = new Date().getFullYear();
 
   return (
@@ -11,7 +13,7 @@ export function LandingFooter() {
           <img src={logoUrl} alt="Materia" className="h-6 w-auto object-contain" />
           <span className="text-slate-300 font-normal">|</span>
           <span className="text-slate-500 font-normal">
-            Digitaler Schul-Workspace
+            {t('landing.footer.brandDesc')}
           </span>
         </div>
 
@@ -20,24 +22,24 @@ export function LandingFooter() {
             href="#funktionen"
             className="hover:text-slate-900 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 rounded px-1"
           >
-            Funktionen
+            {t('landing.navbar.features')}
           </a>
           <a
             href="#lernmodi"
             className="hover:text-slate-900 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 rounded px-1"
           >
-            Lernmodi
+            {t('landing.navbar.modes')}
           </a>
           <a
             href="#quellen"
             className="hover:text-slate-900 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 rounded px-1"
           >
-            Quellen
+            {t('landing.navbar.sources')}
           </a>
         </nav>
 
         <div>
-          <span>© {currentYear} Materia. Alle Rechte vorbehalten.</span>
+          <span>{t('landing.footer.copyright', { year: currentYear })}</span>
         </div>
       </div>
     </footer>

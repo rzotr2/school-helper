@@ -36,6 +36,7 @@ import type { DocumentContent } from '../../../application/use-cases/documentCon
 import { DocumentInfoModal } from './DocumentInfoModal';
 import './annotationLayer.css';
 import { Button } from '../Button';
+import { useTranslation } from '../../../shared/i18n';
 import {
   VIEWER_ZOOM_MAX,
   VIEWER_ZOOM_MIN,
@@ -90,6 +91,7 @@ export function PdfViewer({
   onRunOcr,
   onClose,
 }: PdfViewerProps) {
+  const { t } = useTranslation();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const annotationLayerRef = useRef<HTMLDivElement | null>(null);
@@ -365,21 +367,21 @@ export function PdfViewer({
             className="px-1.5 sm:px-2"
             onClick={handlePrevPage}
             disabled={state.page <= 1}
-            title="Vorherige Seite"
-            aria-label="Vorherige Seite"
+            title={t('viewer.prevPage')}
+            aria-label={t('viewer.prevPage')}
           >
             <ChevronLeft className="w-4 h-4" />
           </Button>
           <span className="min-w-20 sm:min-w-24 text-center text-xs sm:text-sm tabular-nums text-slate-700">
-            Seite {state.page} von {state.totalPages}
+            {t('viewer.pageOf', { page: state.page, totalPages: state.totalPages })}
           </span>
           <Button
             variant="ghost"
             className="px-1.5 sm:px-2"
             onClick={handleNextPage}
             disabled={state.page >= state.totalPages}
-            title="Nächste Seite"
-            aria-label="Nächste Seite"
+            title={t('viewer.nextPage')}
+            aria-label={t('viewer.nextPage')}
           >
             <ChevronRight className="w-4 h-4" />
           </Button>
@@ -393,8 +395,8 @@ export function PdfViewer({
             className="px-1.5 sm:px-2"
             onClick={handleZoomOut}
             disabled={state.zoom <= VIEWER_ZOOM_MIN}
-            title="Verkleinern"
-            aria-label="Verkleinern"
+            title={t('viewer.zoomOut')}
+            aria-label={t('viewer.zoomOut')}
           >
             <ZoomOut className="w-4 h-4" />
           </Button>
@@ -406,8 +408,8 @@ export function PdfViewer({
             className="px-1.5 sm:px-2"
             onClick={handleZoomIn}
             disabled={state.zoom >= VIEWER_ZOOM_MAX}
-            title="Vergrößern"
-            aria-label="Vergrößern"
+            title={t('viewer.zoomIn')}
+            aria-label={t('viewer.zoomIn')}
           >
             <ZoomIn className="w-4 h-4" />
           </Button>
@@ -420,8 +422,8 @@ export function PdfViewer({
             variant="ghost"
             className="px-1.5 sm:px-2"
             onClick={handleFitWidth}
-            title="An Seitenbreite anpassen"
-            aria-label="An Seitenbreite anpassen"
+            title={t('viewer.fitWidth')}
+            aria-label={t('viewer.fitWidth')}
           >
             <MoveHorizontal className="w-4 h-4" />
           </Button>
@@ -429,8 +431,8 @@ export function PdfViewer({
             variant="ghost"
             className="px-1.5 sm:px-2"
             onClick={handleFitPage}
-            title="Ganze Seite einpassen"
-            aria-label="Ganze Seite einpassen"
+            title={t('viewer.fitPage')}
+            aria-label={t('viewer.fitPage')}
           >
             <Maximize className="w-4 h-4" />
           </Button>
@@ -441,8 +443,8 @@ export function PdfViewer({
             variant="ghost"
             className="px-1.5 sm:px-2 text-slate-600 hover:text-blue-600"
             onClick={() => setInfoModalOpen(true)}
-            title="Dokument-Übersicht & Analyse"
-            aria-label="Dokument-Übersicht"
+            title={t('viewer.documentOverview')}
+            aria-label={t('viewer.documentOverview')}
           >
             <Sparkles className="w-4 h-4 text-blue-600" />
           </Button>
@@ -450,8 +452,8 @@ export function PdfViewer({
             variant="ghost"
             className="px-1.5 sm:px-2"
             onClick={handleToggleTextPanel}
-            title={state.textPanelOpen ? 'Text ausblenden' : 'Text anzeigen'}
-            aria-label="Text anzeigen"
+            title={state.textPanelOpen ? t('viewer.hideText') : t('viewer.showText')}
+            aria-label={t('viewer.showText')}
             aria-pressed={state.textPanelOpen}
           >
             <FileText className="w-4 h-4" />
@@ -460,18 +462,18 @@ export function PdfViewer({
             variant="secondary"
             className="px-2 sm:px-3 py-1 sm:py-1.5 gap-1.5 text-xs sm:text-sm"
             onClick={handleDownload}
-            title={`${downloadName} herunterladen`}
-            aria-label={`${downloadName} herunterladen`}
+            title={t('viewer.downloadTitle', { name: downloadName })}
+            aria-label={t('viewer.downloadTitle', { name: downloadName })}
           >
             <Download className="w-4 h-4 shrink-0" />
-            <span className="hidden sm:inline">Download</span>
+            <span className="hidden sm:inline">{t('viewer.downloadBtn')}</span>
           </Button>
           <Button
             variant="ghost"
             className="px-1.5 sm:px-2"
             onClick={onClose}
-            title="Schließen"
-            aria-label="Schließen"
+            title={t('viewer.close')}
+            aria-label={t('viewer.close')}
           >
             <X className="w-4 h-4" />
           </Button>
@@ -485,7 +487,7 @@ export function PdfViewer({
             <canvas
               ref={canvasRef}
               role="img"
-              aria-label={`Seite ${state.page}`}
+              aria-label={t('viewer.pageLabel', { page: state.page })}
               className="block bg-white shadow-sm"
             />
             {/* pdf.js annotation layer of the current page: interactive
@@ -503,7 +505,7 @@ export function PdfViewer({
           <div className="absolute inset-0 flex items-center justify-center bg-white/70">
             <div className="flex items-center gap-2 text-sm text-slate-500">
               <Loader2 className="w-4 h-4 animate-spin" />
-              Seite wird gerendert …
+              {t('viewer.rendering')}
             </div>
           </div>
         )}
@@ -520,13 +522,13 @@ export function PdfViewer({
       {state.textPanelOpen && (
         <div className="border-t border-slate-200 bg-slate-50">
           <div className="flex flex-wrap items-center gap-2 px-4 pt-3">
-            <span className="text-sm font-medium text-slate-900">Seite {state.page}</span>
+            <span className="text-sm font-medium text-slate-900">{t('viewer.pageLabel', { page: state.page })}</span>
             {/* Source selection: affects only the text below, never the
                 canvas rendering. Sticky across page changes. */}
             <div
               className="flex rounded-md border border-slate-200 bg-slate-100 p-0.5"
               role="group"
-              aria-label="Textquelle"
+              aria-label={t('viewer.textSourceAria')}
             >
               <button
                 type="button"
@@ -538,7 +540,7 @@ export function PdfViewer({
                 aria-pressed={state.textSource === 'native'}
                 onClick={() => dispatch({ type: 'SET_TEXT_SOURCE', source: 'native' })}
               >
-                Textebene
+                {t('viewer.nativeText')}
               </button>
               <button
                 type="button"
@@ -550,7 +552,7 @@ export function PdfViewer({
                 aria-pressed={state.textSource === 'ocr'}
                 onClick={() => dispatch({ type: 'SET_TEXT_SOURCE', source: 'ocr' })}
               >
-                OCR
+                {t('viewer.ocrText')}
               </button>
             </div>
             {/* Explicit OCR: allowed even when the native text is good —
@@ -564,12 +566,12 @@ export function PdfViewer({
                   className="h-7 px-2 py-1 text-xs"
                   onClick={() => onRunOcr(state.page)}
                 >
-                  OCR für diese Seite ausführen
+                  {t('viewer.runOcrForPage')}
                 </Button>
               )}
           </div>
           <pre className="m-4 mt-2 max-h-48 overflow-auto whitespace-pre-wrap rounded border border-slate-200 bg-white p-3 text-xs text-slate-700">
-            {ocrMessage ?? (selectedText.trim() === '' ? 'Kein Text auf dieser Seite.' : selectedText)}
+            {ocrMessage ?? (selectedText.trim() === '' ? t('viewer.noTextOnPage') : selectedText)}
           </pre>
         </div>
       )}

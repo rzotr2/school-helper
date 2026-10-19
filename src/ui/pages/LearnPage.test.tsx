@@ -12,6 +12,7 @@ import * as docRetApi from '../../application/use-cases/learning/documentRetriev
 import * as webRetApi from '../../application/use-cases/learning/webRetrieval';
 import * as generatorApi from '../../application/use-cases/learning/learnGenerator';
 import type { WordBankTask } from '../../application/use-cases/learning/learningTypes';
+import { LanguageProvider } from '../../shared/i18n';
 
 // Configure React 19 act environment for jsdom
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -20,6 +21,7 @@ describe('LearnPage component', () => {
   let container: HTMLDivElement;
 
   beforeEach(() => {
+    localStorage.setItem('materia_language', 'de');
     container = document.createElement('div');
     document.body.appendChild(container);
 
@@ -83,6 +85,7 @@ describe('LearnPage component', () => {
   });
 
   afterEach(() => {
+    localStorage.clear();
     document.body.removeChild(container);
     vi.restoreAllMocks();
   });
@@ -91,9 +94,11 @@ describe('LearnPage component', () => {
     const root = createRoot(container);
     await act(async () => {
       root.render(
-        <MemoryRouter>
-          <LearnPage />
-        </MemoryRouter>,
+        <LanguageProvider>
+          <MemoryRouter>
+            <LearnPage />
+          </MemoryRouter>
+        </LanguageProvider>,
       );
     });
     return root;

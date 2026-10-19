@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ProfilePage } from './ProfilePage';
+import { LanguageProvider } from '../../shared/i18n';
 import * as authContext from '../../infrastructure/auth/AuthContext';
 import * as subjectsApi from '../../application/use-cases/subjects';
 import * as topicsApi from '../../application/use-cases/topics';
@@ -16,6 +17,7 @@ describe('ProfilePage component', () => {
   const mockLogOut = vi.fn();
 
   beforeEach(() => {
+    localStorage.setItem('materia_language', 'de');
     container = document.createElement('div');
     document.body.appendChild(container);
 
@@ -39,6 +41,7 @@ describe('ProfilePage component', () => {
   });
 
   afterEach(() => {
+    localStorage.clear();
     document.body.removeChild(container);
     vi.restoreAllMocks();
   });
@@ -49,9 +52,11 @@ describe('ProfilePage component', () => {
     const root = createRoot(container);
     await act(async () => {
       root.render(
-        <MemoryRouter>
-          <ProfilePage />
-        </MemoryRouter>,
+        <LanguageProvider>
+          <MemoryRouter>
+            <ProfilePage />
+          </MemoryRouter>
+        </LanguageProvider>,
       );
     });
 
@@ -101,9 +106,11 @@ describe('ProfilePage component', () => {
     const root = createRoot(container);
     await act(async () => {
       root.render(
-        <MemoryRouter>
-          <ProfilePage />
-        </MemoryRouter>,
+        <LanguageProvider>
+          <MemoryRouter>
+            <ProfilePage />
+          </MemoryRouter>
+        </LanguageProvider>,
       );
     });
 

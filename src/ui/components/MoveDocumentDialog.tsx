@@ -4,6 +4,7 @@ import { Button } from './Button';
 import { Subject } from '../../application/use-cases/subjects';
 import { Topic } from '../../application/use-cases/topics';
 import { Document } from '../../application/use-cases/documents';
+import { useTranslation } from '../../shared/i18n/LanguageContext';
 
 interface MoveDocumentDialogProps {
   isOpen: boolean;
@@ -24,6 +25,7 @@ export function MoveDocumentDialog({
   topics,
   onMove,
 }: MoveDocumentDialogProps) {
+  const { t } = useTranslation();
   const [selectedTopicId, setSelectedTopicId] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,7 +35,7 @@ export function MoveDocumentDialog({
   const currentSubject = currentTopic ? subjects.find(s => s.id === currentTopic.subjectId) : null;
   const currentTopicDisplay = currentTopic
     ? `${currentSubject ? `${currentSubject.name} · ` : ''}${currentTopic.name}`
-    : 'Unbekannt';
+    : t('common.unknown');
 
   useEffect(() => {
     if (isOpen) {
@@ -54,7 +56,7 @@ export function MoveDocumentDialog({
       await onMove(selectedTopicId);
       onClose();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message || 'Fehler beim Verschieben des Dokuments.' : 'Fehler beim Verschieben des Dokuments.');
+      setError(err instanceof Error ? err.message || t('dialogs.moveDocument.error') : t('dialogs.moveDocument.error'));
     } finally {
       setIsSubmitting(false);
     }
@@ -63,23 +65,23 @@ export function MoveDocumentDialog({
   const otherTopicsCount = topics.filter(t => t.id !== currentTopicId).length;
 
   return (
-    <Dialog isOpen={isOpen} onClose={onClose} title="Dokument verschieben">
+    <Dialog isOpen={isOpen} onClose={onClose} title={t('dialogs.moveDocument.title')}>
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         {document && (
           <div className="text-sm">
-            <span className="text-slate-500 block text-xs mb-0.5">Dokument</span>
+            <span className="text-slate-500 block text-xs mb-0.5">{t('dialogs.moveDocument.documentLabel')}</span>
             <p className="font-medium text-slate-800 truncate">{document.originalName}</p>
           </div>
         )}
 
         <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm">
-          <span className="text-slate-500 text-xs block mb-0.5">Aktuelles Thema</span>
+          <span className="text-slate-500 text-xs block mb-0.5">{t('dialogs.moveDocument.currentTopicLabel')}</span>
           <p className="font-medium text-slate-900">{currentTopicDisplay}</p>
         </div>
 
         <div>
           <label htmlFor="target-topic-select" className="block text-sm font-medium text-slate-700 mb-1">
-            Neues Thema auswählen
+            {t('dialogs.moveDocument.selectTargetTopicLabel')}
           </label>
           <select
             id="target-topic-select"
@@ -88,15 +90,15 @@ export function MoveDocumentDialog({
             disabled={isSubmitting || otherTopicsCount === 0}
             className="w-full px-3 py-2 border border-slate-200/90 rounded-lg shadow-2xs focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white text-slate-900 text-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-[border-color,box-shadow] duration-150"
           >
-            <option value="">-- Thema auswählen --</option>
+            <option value="">{t('dialogs.moveDocument.selectPlaceholder')}</option>
             {subjects.map(subject => {
               const subjectTopics = topics.filter(t => t.subjectId === subject.id);
               if (subjectTopics.length === 0) return null;
               return (
                 <optgroup key={subject.id} label={subject.name}>
-                  {subjectTopics.map(t => (
-                    <option key={t.id} value={t.id} disabled={t.id === currentTopicId}>
-                      {t.name} {t.id === currentTopicId ? '(Aktuell)' : ''}
+                  {subjectTopics.map(topic => (
+                    <option key={topic.id} value={topic.id} disabled={topic.id === currentTopicId}>
+                      {topic.name} {topic.id === currentTopicId ? t('dialogs.moveDocument.currentTag') : ''}
                     </option>
                   ))}
                 </optgroup>
@@ -105,7 +107,7 @@ export function MoveDocumentDialog({
           </select>
           {otherTopicsCount === 0 && (
             <p className="text-xs text-slate-500 mt-1">
-              Es sind keine weiteren Themen zum Verschieben vorhanden.
+              {t('dialogs.moveDocument.noOtherTopics')}
             </p>
           )}
         </div>
@@ -114,13 +116,13 @@ export function MoveDocumentDialog({
 
         <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3 mt-4">
           <Button type="button" variant="ghost" onClick={onClose} disabled={isSubmitting}>
-            Abbrechen
+            {t('dialogs.common.cancel')}
           </Button>
           <Button
             type="submit"
             disabled={isSubmitting || !selectedTopicId || selectedTopicId === currentTopicId}
           >
-            {isSubmitting ? 'Wird verschoben...' : 'Verschieben'}
+            {isSubmitting ? t('dialogs.moveDocument.moving') : t('dialogs.moveDocument.moveBtn')}
           </Button>
         </div>
       </form>

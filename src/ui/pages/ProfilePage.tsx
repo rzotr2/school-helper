@@ -22,8 +22,11 @@ import { useLearningProgress } from '../hooks/useLearningProgress';
 import { formatLearningStateLabel } from '../../application/use-cases/learning/learningProgress';
 import { cn } from '../../shared/utils/cn';
 import { Button } from '../components/Button';
+import { useTranslation } from '../../shared/i18n/LanguageContext';
+import { LanguageSwitcher } from '../components/LanguageSwitcher';
 
 export function ProfilePage() {
+  const { t, language } = useTranslation();
   const { user, logOut } = useAuth();
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
@@ -79,10 +82,10 @@ export function ProfilePage() {
             </div>
             <div className="min-w-0">
               <h1 className="text-xl font-semibold text-slate-900 truncate">
-                {user?.email ?? 'Benutzer'}
+                {user?.email ?? t('common.user')}
               </h1>
               <p className="text-xs text-slate-500 mt-0.5">
-                Materia Lernprofil · Angemeldet
+                {t('profile.userProfileTitle')}
               </p>
             </div>
           </div>
@@ -92,17 +95,28 @@ export function ProfilePage() {
               className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-lg shadow-2xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
             >
               <GraduationCap className="w-4 h-4" />
-              <span>Jetzt lernen</span>
+              <span>{t('profile.studyNow')}</span>
             </Link>
             <button
               onClick={logOut}
               className="inline-flex items-center gap-1.5 px-3 py-2 border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 text-xs font-medium rounded-lg transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
-              title="Abmelden"
+              title={t('profile.logout')}
             >
               <LogOut className="w-3.5 h-3.5" />
-              <span>Abmelden</span>
+              <span>{t('profile.logout')}</span>
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* Language Preference Card */}
+      <div className="bg-white border border-slate-200/90 rounded-xl p-5 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-sm font-semibold text-slate-900">{t('profile.languagePreference')}</h2>
+          <p className="text-xs text-slate-500 mt-0.5">{t('profile.languagePreferenceDesc')}</p>
+        </div>
+        <div>
+          <LanguageSwitcher />
         </div>
       </div>
 
@@ -110,51 +124,55 @@ export function ProfilePage() {
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-slate-900 uppercase tracking-wider">
-            Gesamtübersicht
+            {t('profile.overview')}
           </h2>
           {globalProgress.lastStudiedAt && (
             <span className="text-xs text-slate-500">
-              Zuletzt aktiv:{' '}
-              {new Date(globalProgress.lastStudiedAt).toLocaleDateString('de-DE', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric',
+              {t('profile.lastActive', {
+                date: new Date(globalProgress.lastStudiedAt).toLocaleDateString(
+                  language === 'de' ? 'de-DE' : 'en-US',
+                  {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                  },
+                ),
               })}
             </span>
           )}
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          {/* Übungen absolviert */}
+          {/* Exercises */}
           <div className="bg-white border border-slate-200/90 rounded-xl p-4 shadow-2xs">
-            <div className="text-xs text-slate-500 font-medium mb-1">Übungen</div>
+            <div className="text-xs text-slate-500 font-medium mb-1">{t('profile.exercisesStat')}</div>
             <div className="text-2xl font-bold text-slate-900">
               {isLoading ? '-' : globalProgress.totalExercises}
             </div>
-            <div className="text-[11px] text-slate-400 mt-1">Absolviert</div>
+            <div className="text-[11px] text-slate-400 mt-1">{t('profile.completedStat')}</div>
           </div>
 
-          {/* Richtig */}
+          {/* Correct */}
           <div className="bg-white border border-slate-200/90 rounded-xl p-4 shadow-2xs">
-            <div className="text-xs text-emerald-600 font-medium mb-1">Richtig</div>
+            <div className="text-xs text-emerald-600 font-medium mb-1">{t('profile.correctExercises')}</div>
             <div className="text-2xl font-bold text-emerald-700">
               {isLoading ? '-' : globalProgress.correctExercises}
             </div>
-            <div className="text-[11px] text-slate-400 mt-1">Aufgaben gelöst</div>
+            <div className="text-[11px] text-slate-400 mt-1">{t('profile.tasksSolved')}</div>
           </div>
 
-          {/* Falsch */}
+          {/* Incorrect */}
           <div className="bg-white border border-slate-200/90 rounded-xl p-4 shadow-2xs">
-            <div className="text-xs text-slate-500 font-medium mb-1">Wiederholen</div>
+            <div className="text-xs text-slate-500 font-medium mb-1">{t('profile.incorrectStat')}</div>
             <div className="text-2xl font-bold text-slate-700">
               {isLoading ? '-' : globalProgress.incorrectExercises}
             </div>
-            <div className="text-[11px] text-slate-400 mt-1">Falsch beantwortet</div>
+            <div className="text-[11px] text-slate-400 mt-1">{t('profile.answeredIncorrectly')}</div>
           </div>
 
-          {/* Trefferquote */}
+          {/* Accuracy */}
           <div className="bg-white border border-slate-200/90 rounded-xl p-4 shadow-2xs">
-            <div className="text-xs text-blue-600 font-medium mb-1">Trefferquote</div>
+            <div className="text-xs text-blue-600 font-medium mb-1">{t('profile.overallAccuracy')}</div>
             <div className="text-2xl font-bold text-blue-700">
               {isLoading
                 ? '-'
@@ -163,32 +181,32 @@ export function ProfilePage() {
                   : '-'}
             </div>
             <div className="text-[11px] text-slate-400 mt-1">
-              {globalProgress.accuracyPercentage !== null ? 'Erfolgsquote' : 'Keine Übungen'}
+              {globalProgress.accuracyPercentage !== null ? t('profile.successRate') : t('profile.noExercises')}
             </div>
           </div>
 
-          {/* Themen gelernt */}
+          {/* Topics learned */}
           <div className="bg-white border border-slate-200/90 rounded-xl p-4 shadow-2xs">
-            <div className="text-xs text-slate-500 font-medium mb-1">Themen</div>
+            <div className="text-xs text-slate-500 font-medium mb-1">{t('profile.topicsStat')}</div>
             <div className="text-2xl font-bold text-slate-900">
               {isLoading ? '-' : globalProgress.topicsLearnedCount}
               <span className="text-sm font-normal text-slate-400 ml-1">
                 /{globalProgress.totalTopicsCount}
               </span>
             </div>
-            <div className="text-[11px] text-slate-400 mt-1">Bearbeitet</div>
+            <div className="text-[11px] text-slate-400 mt-1">{t('profile.studiedStat')}</div>
           </div>
 
-          {/* Fächer aktiv */}
+          {/* Subjects active */}
           <div className="bg-white border border-slate-200/90 rounded-xl p-4 shadow-2xs">
-            <div className="text-xs text-slate-500 font-medium mb-1">Fächer</div>
+            <div className="text-xs text-slate-500 font-medium mb-1">{t('profile.subjectsStat')}</div>
             <div className="text-2xl font-bold text-slate-900">
               {isLoading ? '-' : globalProgress.subjectsLearnedCount}
               <span className="text-sm font-normal text-slate-400 ml-1">
                 /{globalProgress.totalSubjectsCount}
               </span>
             </div>
-            <div className="text-[11px] text-slate-400 mt-1">Mit Lernaktivität</div>
+            <div className="text-[11px] text-slate-400 mt-1">{t('profile.withActivityStat')}</div>
           </div>
         </div>
       </section>
@@ -197,19 +215,19 @@ export function ProfilePage() {
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-slate-900 uppercase tracking-wider">
-            Lernfortschritt nach Fächern
+            {t('profile.progressBySubject')}
           </h2>
           <span className="text-xs text-slate-500">
-            {subjects.length} {subjects.length === 1 ? 'Fach' : 'Fächer'}
+            {t('profile.subjectsCount', { count: subjects.length })}
           </span>
         </div>
 
         {subjects.length === 0 ? (
           <div className="bg-white border border-dashed border-slate-200/90 rounded-xl p-8 text-center">
             <BookOpen className="w-8 h-8 text-slate-400 mx-auto mb-2" />
-            <p className="text-sm font-medium text-slate-800">Noch keine Fächer angelegt</p>
+            <p className="text-sm font-medium text-slate-800">{t('profile.noSubjectsCreated')}</p>
             <p className="text-xs text-slate-500 mt-1">
-              Erstelle ein Fach in der Seitenleiste, um Unterlagen hochzuladen und zu lernen.
+              {t('profile.noSubjectsDesc')}
             </p>
           </div>
         ) : (
@@ -249,13 +267,19 @@ export function ProfilePage() {
                                     : 'bg-slate-50 text-slate-500 border-slate-200',
                             )}
                           >
-                            {formatLearningStateLabel(prog.learningState)}
+                            {t(`learning.states.${prog.learningState}` as any) || formatLearningStateLabel(prog.learningState)}
                           </span>
                         </div>
                         <p className="text-xs text-slate-500 mt-0.5">
                           {hasActivity
-                            ? `${prog.completedExercises} Übungen · ${prog.correctExercises} richtig (${prog.accuracyPercentage}%) · ${prog.topicsLearnedCount} von ${prog.totalTopicsCount} Themen bearbeitet`
-                            : `Noch nicht gelernt · ${prog.totalTopicsCount} ${prog.totalTopicsCount === 1 ? 'Thema' : 'Themen'}`}
+                            ? t('profile.subjectProgressSummary', {
+                                exercises: prog.completedExercises,
+                                correct: prog.correctExercises,
+                                accuracy: prog.accuracyPercentage ?? undefined,
+                                learnedTopics: prog.topicsLearnedCount,
+                                totalTopics: prog.totalTopicsCount,
+                              })
+                            : t('profile.notLearnedYet', { totalTopics: prog.totalTopicsCount })}
                         </p>
                       </div>
                     </div>
@@ -266,13 +290,13 @@ export function ProfilePage() {
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/80 rounded-lg text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
                       >
                         <GraduationCap className="w-3.5 h-3.5" />
-                        <span>Fach üben</span>
+                        <span>{t('profile.practiceSubject')}</span>
                       </Link>
                       <Link
                         to={`/subject/${subject.id}`}
                         className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-                        title="Fach anzeigen"
-                        aria-label={`Fach "${subject.name}" anzeigen`}
+                        title={t('profile.viewSubjectTitle')}
+                        aria-label={t('profile.viewSubjectAria', { name: subject.name })}
                       >
                         <ArrowRight className="w-4 h-4" />
                       </Link>
@@ -308,11 +332,11 @@ export function ProfilePage() {
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-slate-900 uppercase tracking-wider">
-            Lernverlauf
+            {t('profile.recentHistory')}
           </h2>
           {recentHistory.length > 0 && (
             <span className="text-xs text-slate-500">
-              {recentHistory.length} {recentHistory.length === 1 ? 'Session' : 'Sessions'}
+              {t('profile.sessionsCount', { count: recentHistory.length })}
             </span>
           )}
         </div>
@@ -323,17 +347,17 @@ export function ProfilePage() {
               <BarChart2 className="w-5 h-5" />
             </div>
             <h3 className="text-sm font-semibold text-slate-900 mb-1">
-              Noch keine Lernaktivität
+              {t('profile.noActivityTitle')}
             </h3>
             <p className="text-xs text-slate-500 max-w-sm mx-auto mb-4 leading-relaxed">
-              Bearbeite deine erste Übung, um hier deinen Lernfortschritt und Verlauf zu sehen.
+              {t('profile.noActivityDesc')}
             </p>
             <Link
               to="/learn"
               className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-lg shadow-2xs transition-colors"
             >
               <GraduationCap className="w-4 h-4" />
-              <span>Erste Übung starten</span>
+              <span>{t('profile.startLearningBtn')}</span>
             </Link>
           </div>
         ) : (
@@ -356,13 +380,13 @@ export function ProfilePage() {
                       <span className="text-slate-500 truncate">{item.subjectName}</span>
                       <span className="text-slate-400">·</span>
                       <span className="text-[11px] font-medium bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-200/70">
-                        {item.exerciseTypeLabel}
+                        {t(`learning.modes.${item.rawExerciseType}` as any) || item.exerciseTypeLabel}
                       </span>
                     </div>
                     <div className="flex items-center gap-2 mt-0.5 text-[11px] text-slate-400">
                       <Clock className="w-3 h-3 text-slate-400" />
                       <span>
-                        {item.dateLabel} um {item.timeLabel} Uhr
+                        {t('profile.atTime', { date: item.dateLabel, time: item.timeLabel })}
                       </span>
                     </div>
                   </div>
@@ -371,10 +395,10 @@ export function ProfilePage() {
                 <div className="flex items-center gap-3 shrink-0 self-end sm:self-center">
                   <div className="text-right">
                     <span className="text-xs font-semibold text-slate-900 block">
-                      {item.correctCount} / {item.exerciseCount} richtig
+                      {t('profile.correctOfTotal', { correct: item.correctCount, total: item.exerciseCount })}
                     </span>
                     <span className="text-[11px] text-slate-400 block">
-                      {item.accuracyPercentage}% Trefferquote
+                      {t('profile.accuracyRate', { accuracy: item.accuracyPercentage })}
                     </span>
                   </div>
                   <span
@@ -388,10 +412,10 @@ export function ProfilePage() {
                     )}
                   >
                     {item.accuracyPercentage >= 80
-                      ? 'Sicher'
+                      ? t('learning.states.sicher')
                       : item.accuracyPercentage >= 50
-                        ? 'Üben'
-                        : 'Wiederholen'}
+                        ? t('learning.states.ueben')
+                        : t('learning.states.wiederholen')}
                   </span>
                 </div>
               </div>
@@ -406,12 +430,12 @@ export function ProfilePage() {
                   {showAllHistory ? (
                     <>
                       <ChevronUp className="w-3.5 h-3.5" />
-                      <span>Weniger anzeigen</span>
+                      <span>{t('profile.showLess')}</span>
                     </>
                   ) : (
                     <>
                       <ChevronDown className="w-3.5 h-3.5" />
-                      <span>Alle {recentHistory.length} Sessions anzeigen</span>
+                      <span>{t('profile.showAllSessions', { count: recentHistory.length })}</span>
                     </>
                   )}
                 </button>

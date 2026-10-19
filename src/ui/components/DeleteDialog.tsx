@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Dialog } from './Dialog';
 import { Button } from './Button';
+import { useTranslation } from '../../shared/i18n/LanguageContext';
 
 interface DeleteDialogProps {
   isOpen: boolean;
@@ -17,6 +18,7 @@ export function DeleteDialog({
   title,
   description
 }: DeleteDialogProps) {
+  const { t } = useTranslation();
   const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -27,7 +29,7 @@ export function DeleteDialog({
       await onConfirm();
       onClose();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message || 'Ein Fehler ist aufgetreten' : 'Ein Fehler ist aufgetreten');
+      setError(err instanceof Error ? err.message || t('dialogs.common.genericError') : t('dialogs.common.genericError'));
     } finally {
       setIsDeleting(false);
     }
@@ -42,7 +44,7 @@ export function DeleteDialog({
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3 mt-4">
           <Button type="button" variant="ghost" onClick={onClose} disabled={isDeleting}>
-            Abbrechen
+            {t('dialogs.common.cancel')}
           </Button>
           <Button
             type="button"
@@ -50,7 +52,7 @@ export function DeleteDialog({
             onClick={handleDelete}
             disabled={isDeleting}
           >
-            {isDeleting ? 'Wird gelöscht...' : 'Löschen'}
+            {isDeleting ? t('dialogs.common.deleting') : t('dialogs.common.delete')}
           </Button>
         </div>
       </div>

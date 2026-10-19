@@ -2,9 +2,11 @@ import React from 'react';
 import { ArrowRight, BookOpen } from 'lucide-react';
 import { useAuth } from '../../../infrastructure/auth/AuthContext';
 import { Button } from '../Button';
+import { useTranslation } from '../../../shared/i18n';
 
 export function FinalCtaSection() {
   const { signIn, isLoading, user } = useAuth();
+  const { t } = useTranslation();
 
   return (
     <section className="py-16 sm:py-20 px-4 sm:px-6 bg-slate-50/80 border-t border-slate-200/80">
@@ -15,10 +17,10 @@ export function FinalCtaSection() {
 
         <div className="space-y-2">
           <h2 className="text-2xl sm:text-3xl font-semibold text-slate-900 tracking-tight">
-            Bereit für mehr Ordnung in deinem Schulalltag?
+            {t('landing.finalCta.title')}
           </h2>
           <p className="text-sm sm:text-base text-slate-600 max-w-lg mx-auto">
-            Starte jetzt mit deinem Google-Konto. Verwalte deine Fächer, erfasse deine PDF-Unterlagen und bereite dich gezielt auf Klausuren vor.
+            {t('landing.finalCta.description')}
           </p>
         </div>
 
@@ -31,7 +33,7 @@ export function FinalCtaSection() {
               }}
               className="w-full sm:w-auto h-11 px-6 text-sm font-medium gap-2 shadow-xs cursor-pointer"
             >
-              <span>Direkt zum Workspace</span>
+              <span>{t('landing.finalCta.toWorkspace')}</span>
               <ArrowRight className="w-4 h-4" />
             </Button>
           ) : (
@@ -59,13 +61,13 @@ export function FinalCtaSection() {
                   d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
                 />
               </svg>
-              <span>Jetzt mit Google starten</span>
+              <span>{t('landing.finalCta.startWithGoogle')}</span>
             </Button>
           )}
         </div>
 
         <p className="text-xs text-slate-500">
-          Kostenlose Anmeldung mit Google · Sofort einsatzbereit im Webbrowser
+          {t('landing.finalCta.microcopy')}
         </p>
       </div>
     </section>

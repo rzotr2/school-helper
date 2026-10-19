@@ -3,12 +3,28 @@ import type { Dispatch, SetStateAction } from 'react';
 import { processDocument } from '../../application/use-cases/documentProcessing';
 import type { Document } from '../../application/use-cases/documents';
 import type { PdfInspectionProgress } from '../../infrastructure/pdf/types';
+import { useTranslation } from '../../shared/i18n';
 
 /**
- * German progress line for automatic processing, mirroring the strings
+ * Localized progress line for automatic processing, mirroring the strings
  * the viewer shows while inspecting a document on open.
  */
-export function describeProcessingProgress(progress: PdfInspectionProgress): string {
+export function describeProcessingProgress(
+  progress: PdfInspectionProgress,
+  t?: (key: string, params?: Record<string, unknown>) => string,
+): string {
+  if (t) {
+    return progress.phase === 'ocr'
+      ? t('documents.processingProgress.ocrRunning', {
+          currentPage: progress.currentPage,
+          ocrPageCount: progress.ocrPageCount,
+          pageCount: progress.pageCount,
+        })
+      : t('documents.processingProgress.readingText', {
+          currentPage: progress.currentPage,
+          pageCount: progress.pageCount,
+        });
+  }
   return progress.phase === 'ocr'
     ? `OCR läuft: Seite ${progress.currentPage} von ${progress.ocrPageCount} (${progress.pageCount} Seiten insgesamt)`
     : `Text wird gelesen: Seite ${progress.currentPage} von ${progress.pageCount}`;
@@ -29,7 +45,8 @@ export function useDocumentProcessing(
   userId: string | undefined,
   setDocuments: Dispatch<SetStateAction<Document[]>>,
 ) {
-  // documentId → German progress line ('' until the first progress event).
+  const { t } = useTranslation();
+  // documentId → progress line ('' until the first progress event).
   const [processingProgress, setProcessingProgress] = useState<ReadonlyMap<string, string>>(
     new Map(),
   );
@@ -59,7 +76,7 @@ export function useDocumentProcessing(
         const updated = await processDocument(userId, documentId, {
           onProgress: (progress) =>
             setProcessingProgress((previous) =>
-              new Map(previous).set(documentId, describeProcessingProgress(progress)),
+              new Map(previous).set(documentId, describeProcessingProgress(progress, t)),
             ),
         });
         setDocuments((previous) =>

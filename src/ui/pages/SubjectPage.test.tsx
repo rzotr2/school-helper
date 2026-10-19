@@ -59,7 +59,7 @@ describe('SubjectPage component topic card navigation', () => {
 
     // Topic title rendered
     expect(container.textContent).toContain('Wiederholung');
-    expect(container.textContent).toContain('Thema öffnen & Unterlagen ansehen');
+    expect(container.textContent).toMatch(/Open topic & view materials|Thema öffnen & Unterlagen ansehen/);
 
     // Primary link covers topic card
     const topicLink = container.querySelector('a[href="/subject/sub-1/topic/top-1"]');
@@ -68,14 +68,16 @@ describe('SubjectPage component topic card navigation', () => {
     expect(topicLink?.className).toContain('after:inset-0');
 
     // Independent action buttons exist
-    const renameBtn = Array.from(container.querySelectorAll('button')).find((btn) =>
-      btn.getAttribute('aria-label')?.includes('umbenennen'),
-    );
+    const renameBtn = Array.from(container.querySelectorAll('button')).find((btn) => {
+      const label = btn.getAttribute('aria-label');
+      return label?.includes('Rename') || label?.includes('umbenennen');
+    });
     expect(renameBtn).toBeDefined();
 
-    const deleteBtn = Array.from(container.querySelectorAll('button')).find((btn) =>
-      btn.getAttribute('aria-label')?.includes('löschen'),
-    );
+    const deleteBtn = Array.from(container.querySelectorAll('button')).find((btn) => {
+      const label = btn.getAttribute('aria-label');
+      return label?.includes('Delete') || label?.includes('löschen');
+    });
     expect(deleteBtn).toBeDefined();
 
     // Clicking Rename sets editingTopic and renders dialog
@@ -83,7 +85,7 @@ describe('SubjectPage component topic card navigation', () => {
       renameBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     const editHeading = Array.from(container.querySelectorAll('h2')).find((h) =>
-      h.textContent?.includes('Thema umbenennen'),
+      h.textContent?.includes('Rename Topic') || h.textContent?.includes('Thema umbenennen'),
     );
     expect(editHeading).toBeDefined();
   });
@@ -100,9 +102,10 @@ describe('SubjectPage component topic card navigation', () => {
       );
     });
 
-    const deleteBtn = Array.from(container.querySelectorAll('button')).find((btn) =>
-      btn.getAttribute('aria-label') === 'Thema "Wiederholung" löschen',
-    );
+    const deleteBtn = Array.from(container.querySelectorAll('button')).find((btn) => {
+      const label = btn.getAttribute('aria-label');
+      return label?.includes('Wiederholung') && (label?.includes('Delete') || label?.includes('löschen'));
+    });
     expect(deleteBtn).toBeDefined();
 
     // Click Delete button
@@ -111,7 +114,7 @@ describe('SubjectPage component topic card navigation', () => {
     });
 
     const deleteHeading = Array.from(container.querySelectorAll('h2')).find((h) =>
-      h.textContent === 'Thema löschen?',
+      h.textContent?.includes('Delete') || h.textContent?.includes('löschen'),
     );
     expect(deleteHeading).toBeDefined();
   });

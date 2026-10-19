@@ -17,6 +17,7 @@ import {
 } from '../../application/use-cases/topics';
 import { getSchoolProfile, createSchoolProfile } from '../../application/use-cases/schoolProfile';
 import { NameDialog } from './NameDialog';
+import { useTranslation } from '../../shared/i18n/LanguageContext';
 import logoUrl from '../../assets/logo.png';
 
 interface SidebarProps {
@@ -25,6 +26,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
+  const { t } = useTranslation();
   const { user, isLoading: isAuthLoading } = useAuth();
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
@@ -150,7 +152,7 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
     <div className="p-4 flex-1 overflow-y-auto">
       <div className="mb-6">
         <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 px-2">
-          Materia
+          {t('nav.brand')}
         </h3>
         <nav className="space-y-0.5">
           <NavLink
@@ -165,7 +167,7 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
             }
           >
             <FileText className="w-4 h-4 shrink-0" />
-            <span>Alle Dateien</span>
+            <span>{t('nav.allFiles')}</span>
           </NavLink>
           <NavLink
             to="/learn"
@@ -178,7 +180,7 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
             }
           >
             <GraduationCap className="w-4 h-4 shrink-0" />
-            <span>Lernen</span>
+            <span>{t('nav.learn')}</span>
           </NavLink>
           <NavLink
             to="/profile"
@@ -191,7 +193,7 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
             }
           >
             <BarChart2 className="w-4 h-4 shrink-0" />
-            <span>Lernstatistik</span>
+            <span>{t('nav.statistics')}</span>
           </NavLink>
         </nav>
       </div>
@@ -199,13 +201,13 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
       <div>
         <div className="flex items-center justify-between mb-2 px-2">
           <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-            Fächer
+            {t('nav.subjects')}
           </h3>
           <button
             onClick={() => setIsAddDialogOpen(true)}
             className="text-slate-400 hover:text-slate-600 transition-[background-color,color,transform] duration-150 active:scale-95 cursor-pointer p-1 rounded hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
-            title="Fach hinzufügen"
-            aria-label="Fach hinzufügen"
+            title={t('nav.addSubjectTitle')}
+            aria-label={t('nav.addSubjectTitle')}
           >
             <Plus className="w-4 h-4" />
           </button>
@@ -217,7 +219,7 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
             </div>
           ) : subjects.length === 0 ? (
             <div className="px-2 py-2 text-sm text-slate-400 italic">
-              Noch keine Fächer
+              {t('nav.noSubjectsYet')}
             </div>
           ) : (
             subjects.map((subject) => {
@@ -262,8 +264,8 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
                           "w-7 h-7 flex items-center justify-center rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 shrink-0 transition-[transform,color,background-color] duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40",
                         )}
                         aria-expanded={isExpanded}
-                        aria-label={`${subject.name} Themen ${isExpanded ? 'einklappen' : 'ausklappen'}`}
-                        title={isExpanded ? 'Einklappen' : 'Ausklappen'}
+                        aria-label={t('nav.subjectTopicsAria', { name: subject.name, state: isExpanded ? t('nav.collapseTopics') : t('nav.expandTopics') })}
+                        title={isExpanded ? t('nav.collapseTopics') : t('nav.expandTopics')}
                       >
                         <ChevronRight
                           className={cn(
@@ -341,7 +343,7 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
                 type="button"
                 onClick={onMobileClose}
                 className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
-                aria-label="Navigation schließen"
+                aria-label={t('nav.closeNavigation')}
               >
                 <X className="w-5 h-5" />
               </button>
@@ -355,8 +357,8 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
         isOpen={isAddDialogOpen}
         onClose={() => setIsAddDialogOpen(false)}
         onSubmit={handleAddSubject}
-        title="Neues Fach"
-        submitLabel="Fach hinzufügen"
+        title={t('dialogs.newSubject.title')}
+        submitLabel={t('dialogs.newSubject.submitLabel')}
       />
     </>
   );

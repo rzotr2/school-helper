@@ -3,6 +3,7 @@ import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { LandingPage } from './LandingPage';
+import { LanguageProvider } from '../../shared/i18n';
 import * as authContext from '../../infrastructure/auth/AuthContext';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -12,7 +13,20 @@ describe('LandingPage component', () => {
   const mockSignIn = vi.fn();
   const mockLogOut = vi.fn();
 
+  const renderComponent = async () => {
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <LanguageProvider>
+          <LandingPage />
+        </LanguageProvider>,
+      );
+    });
+    return root;
+  };
+
   beforeEach(() => {
+    localStorage.setItem('materia_language', 'de');
     container = document.createElement('div');
     document.body.appendChild(container);
 
@@ -25,15 +39,13 @@ describe('LandingPage component', () => {
   });
 
   afterEach(() => {
+    localStorage.clear();
     document.body.removeChild(container);
     vi.restoreAllMocks();
   });
 
   it('renders landing page with Materia branding and hero headline', async () => {
-    const root = createRoot(container);
-    await act(async () => {
-      root.render(<LandingPage />);
-    });
+    await renderComponent();
 
     // Branding
     expect(container.textContent).toContain('Materia');
@@ -51,10 +63,7 @@ describe('LandingPage component', () => {
   });
 
   it('triggers signIn when clicking "Mit Google starten" or "Jetzt starten"', async () => {
-    const root = createRoot(container);
-    await act(async () => {
-      root.render(<LandingPage />);
-    });
+    await renderComponent();
 
     const startButtons = Array.from(container.querySelectorAll('button')).filter((b) =>
       b.textContent?.includes('starten'),
@@ -69,10 +78,7 @@ describe('LandingPage component', () => {
   });
 
   it('allows switching tabs in the product preview window', async () => {
-    const root = createRoot(container);
-    await act(async () => {
-      root.render(<LandingPage />);
-    });
+    await renderComponent();
 
     // Find tab 2 button
     const buttons = Array.from(container.querySelectorAll('button'));
@@ -100,10 +106,7 @@ describe('LandingPage component', () => {
   });
 
   it('allows exploring the 5 learning modes in the showcase section', async () => {
-    const root = createRoot(container);
-    await act(async () => {
-      root.render(<LandingPage />);
-    });
+    await renderComponent();
 
     // Default Quiz
     expect(container.textContent).toContain(
@@ -159,10 +162,7 @@ describe('LandingPage component', () => {
       logOut: mockLogOut,
     });
 
-    const root = createRoot(container);
-    await act(async () => {
-      root.render(<LandingPage />);
-    });
+    await renderComponent();
 
     const workspaceButtons = Array.from(container.querySelectorAll('button')).filter((b) =>
       b.textContent?.includes('Zum Workspace'),

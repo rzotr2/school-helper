@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Dialog } from './Dialog';
 import { Button } from './Button';
+import { useTranslation } from '../../shared/i18n/LanguageContext';
 
 interface NameDialogProps {
   isOpen: boolean;
@@ -21,13 +22,17 @@ export function NameDialog({
   initialName = '',
   title,
   submitLabel,
-  placeholder = 'z.B. Fachkunde',
+  placeholder,
   maxLength = 100,
-  label = 'Name'
+  label
 }: NameDialogProps) {
+  const { t } = useTranslation();
   const [name, setName] = useState(initialName);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const resolvedLabel = label ?? t('dialogs.common.nameLabel');
+  const resolvedPlaceholder = placeholder ?? t('dialogs.newSubject.placeholder');
 
   useEffect(() => {
     if (isOpen) {
@@ -46,7 +51,7 @@ export function NameDialog({
       await onSubmit(name.trim());
       onClose();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message || 'Ein Fehler ist aufgetreten' : 'Ein Fehler ist aufgetreten');
+      setError(err instanceof Error ? err.message || t('dialogs.common.genericError') : t('dialogs.common.genericError'));
     } finally {
       setIsSubmitting(false);
     }
@@ -57,7 +62,7 @@ export function NameDialog({
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <div>
           <label htmlFor="name" className="block text-sm font-medium text-slate-700 mb-1">
-            {label}
+            {resolvedLabel}
           </label>
           <input
             id="name"
@@ -65,7 +70,7 @@ export function NameDialog({
             value={name}
             onChange={(e) => setName(e.target.value)}
             className="w-full px-3 py-2 text-sm bg-white border border-slate-200/90 rounded-lg shadow-2xs focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 text-slate-900 placeholder:text-slate-400 transition-[border-color,box-shadow] duration-150"
-            placeholder={placeholder}
+            placeholder={resolvedPlaceholder}
             disabled={isSubmitting}
             maxLength={maxLength}
             autoFocus
@@ -74,10 +79,10 @@ export function NameDialog({
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3 mt-4">
           <Button type="button" variant="ghost" onClick={onClose} disabled={isSubmitting}>
-            Abbrechen
+            {t('dialogs.common.cancel')}
           </Button>
           <Button type="submit" disabled={isSubmitting || !name.trim()}>
-            {isSubmitting ? 'Wird gespeichert...' : submitLabel}
+            {isSubmitting ? t('dialogs.common.saving') : submitLabel}
           </Button>
         </div>
       </form>

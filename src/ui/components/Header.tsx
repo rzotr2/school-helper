@@ -2,6 +2,8 @@ import React from 'react';
 import { BookOpen, LogOut, GraduationCap, Menu } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../infrastructure/auth/AuthContext';
+import { useTranslation } from '../../shared/i18n/LanguageContext';
+import { LanguageSwitcher } from './LanguageSwitcher';
 import { cn } from '../../shared/utils/cn';
 
 import logoUrl from '../../assets/logo.png';
@@ -12,6 +14,7 @@ interface HeaderProps {
 
 export function Header({ onOpenMobileMenu }: HeaderProps) {
   const { user, logOut } = useAuth();
+  const { t } = useTranslation();
   const location = useLocation();
   const isLearnActive = location.pathname.startsWith('/learn');
   
@@ -28,8 +31,8 @@ export function Header({ onOpenMobileMenu }: HeaderProps) {
             type="button"
             onClick={onOpenMobileMenu}
             className="md:hidden p-1.5 -ml-0.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-md transition-[background-color,color,transform] duration-150 active:scale-95 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
-            title="Navigation öffnen"
-            aria-label="Navigation öffnen"
+            title={t('nav.openNavigation')}
+            aria-label={t('nav.openNavigation')}
           >
             <Menu className="w-5 h-5" />
           </button>
@@ -41,7 +44,8 @@ export function Header({ onOpenMobileMenu }: HeaderProps) {
           <img src={logoUrl} alt="Materia" className="h-6.5 w-auto object-contain" />
         </Link>
       </div>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 sm:gap-3">
+        <LanguageSwitcher />
         <Link
           to="/learn"
           className={cn(
@@ -52,23 +56,23 @@ export function Header({ onOpenMobileMenu }: HeaderProps) {
           )}
         >
           <GraduationCap className="w-4 h-4 text-blue-600" />
-          <span>Lernen</span>
+          <span>{t('nav.learn')}</span>
         </Link>
         <div className="h-4 w-px bg-slate-200" />
         <div className="flex items-center gap-2">
           <Link
             to="/profile"
             className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 border border-slate-200 flex items-center justify-center text-xs font-medium text-slate-700 select-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
-            title={`Profil & Lernstatistik (${user?.email || 'User'})`}
-            aria-label="Profil & Lernstatistik öffnen"
+            title={t('nav.profileAria', { email: user?.email || 'User' })}
+            aria-label={t('nav.profileAria', { email: user?.email || 'User' })}
           >
             {initials}
           </Link>
           <button
             onClick={logOut}
             className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md transition-[background-color,color,transform] duration-150 active:scale-95 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
-            title="Abmelden"
-            aria-label="Abmelden"
+            title={t('nav.logout')}
+            aria-label={t('nav.logout')}
           >
             <LogOut className="w-4 h-4" />
           </button>

@@ -1,11 +1,14 @@
 import React from 'react';
 import { ArrowRight } from 'lucide-react';
 import { useAuth } from '../../../infrastructure/auth/AuthContext';
+import { useTranslation } from '../../../shared/i18n/LanguageContext';
+import { LanguageSwitcher } from '../LanguageSwitcher';
 import { Button } from '../Button';
 import logoUrl from '../../../assets/logo.png';
 
 export function LandingNavbar() {
   const { signIn, isLoading, user } = useAuth();
+  const { t } = useTranslation();
 
   return (
     <header className="sticky top-0 z-40 w-full bg-white/90 backdrop-blur-md border-b border-slate-200/80 transition-colors">
@@ -14,7 +17,7 @@ export function LandingNavbar() {
         <a
           href="/"
           className="flex items-center text-slate-900 hover:opacity-90 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 rounded-md py-1"
-          aria-label="Materia Startseite"
+          aria-label={t('landing.navbar.brandAria')}
         >
           <img src={logoUrl} alt="Materia" className="h-7 sm:h-8 w-auto object-contain" />
         </a>
@@ -25,24 +28,25 @@ export function LandingNavbar() {
             href="#funktionen"
             className="hover:text-slate-900 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 rounded px-1"
           >
-            Funktionen
+            {t('landing.navbar.features')}
           </a>
           <a
             href="#lernmodi"
             className="hover:text-slate-900 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 rounded px-1"
           >
-            Lernmodi
+            {t('landing.navbar.modes')}
           </a>
           <a
             href="#quellen"
             className="hover:text-slate-900 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 rounded px-1"
           >
-            Quellen & Transparenz
+            {t('landing.navbar.sources')}
           </a>
         </nav>
 
-        {/* Action Button */}
+        {/* Action Button & Language Switcher */}
         <div className="flex items-center gap-3">
+          <LanguageSwitcher />
           {user ? (
             <Button
               variant="primary"
@@ -51,7 +55,7 @@ export function LandingNavbar() {
               }}
               className="gap-2 text-xs sm:text-sm h-9 px-3 sm:px-4"
             >
-              <span>Zum Workspace</span>
+              <span>{t('landing.navbar.toWorkspace')}</span>
               <ArrowRight className="w-4 h-4" />
             </Button>
           ) : (
@@ -61,7 +65,7 @@ export function LandingNavbar() {
               disabled={isLoading}
               className="gap-2 text-xs sm:text-sm h-9 px-3 sm:px-4 cursor-pointer"
             >
-              <span>Jetzt starten</span>
+              <span>{t('landing.navbar.getStarted')}</span>
               <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </Button>
           )}

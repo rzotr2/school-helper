@@ -1,35 +1,34 @@
 import React from 'react';
-import { Upload, FolderTree, FileCheck, GraduationCap, ArrowRight } from 'lucide-react';
+import { Upload, FolderTree, FileCheck, GraduationCap } from 'lucide-react';
+import { useTranslation } from '../../../shared/i18n/LanguageContext';
 
 export function WorkflowSection() {
+  const { t } = useTranslation();
+
   const steps = [
     {
-      number: '01',
+      number: t('landing.workflow.step1Number'),
       icon: Upload,
-      title: 'Material hochladen',
-      description:
-        'Lade deine PDF-Arbeitsblätter, Skripte und Schulunterlagen in deinen digitalen Workspace hoch.',
+      title: t('landing.workflow.step1Title'),
+      description: t('landing.workflow.step1Desc'),
     },
     {
-      number: '02',
+      number: t('landing.workflow.step2Number'),
       icon: FolderTree,
-      title: 'Strukturieren & Zuordnen',
-      description:
-        'Ordne deine Dokumente nach Fächern und Themen. Vorschläge unterstützen dich bei der Zuordnung.',
+      title: t('landing.workflow.step2Title'),
+      description: t('landing.workflow.step2Desc'),
     },
     {
-      number: '03',
+      number: t('landing.workflow.step3Number'),
       icon: FileCheck,
-      title: 'Inhalte & OCR erfassen',
-      description:
-        'Erkenne Dokumenttypen, Kernkonzepte und Zusammenfassungen. Gescannte Seiten werden per OCR erfasst.',
+      title: t('landing.workflow.step3Title'),
+      description: t('landing.workflow.step3Desc'),
     },
     {
-      number: '04',
+      number: t('landing.workflow.step4Number'),
       icon: GraduationCap,
-      title: 'Gezielt lernen',
-      description:
-        'Trainiere mit Quiz, Karteikarten, Lückentexten und Wortbank – mit konkreten Belegen aus deinen Unterlagen.',
+      title: t('landing.workflow.step4Title'),
+      description: t('landing.workflow.step4Desc'),
     },
   ];
 
@@ -38,13 +37,13 @@ export function WorkflowSection() {
       <div className="max-w-5xl mx-auto px-4 sm:px-6">
         <div className="text-center max-w-2xl mx-auto mb-12 sm:mb-14">
           <span className="text-xs font-semibold text-blue-700 uppercase tracking-wider bg-blue-50 px-2.5 py-1 rounded-md border border-blue-100">
-            Der Schul-Workflow
+            {t('landing.workflow.badge')}
           </span>
           <h2 className="text-2xl sm:text-3xl font-semibold text-slate-900 tracking-tight mt-3 mb-2">
-            Vom Dokument zum Lernerfolg
+            {t('landing.workflow.title')}
           </h2>
           <p className="text-sm sm:text-base text-slate-600">
-            Wie Materia deine alltäglichen Unterrichtsmaterialien strukturiert und lernbar macht.
+            {t('landing.workflow.subtitle')}
           </p>
         </div>
 

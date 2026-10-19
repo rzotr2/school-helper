@@ -12,22 +12,31 @@ import { PdfCancellationError, PdfInspectionError } from '../../infrastructure/p
 import { inspectPdf } from '../../infrastructure/pdf/inspect';
 import type { OcrStatus, PdfInspectionProgress, PdfInspectionResult } from '../../infrastructure/pdf/types';
 import { Button } from '../components/Button';
-
-const OCR_STATUS_LABELS: Record<OcrStatus, string> = {
-  'not-needed': 'OCR nicht nötig',
-  pending: 'OCR ausstehend',
-  processing: 'OCR läuft',
-  completed: 'OCR fertig',
-  failed: 'OCR fehlgeschlagen',
-};
+import { useTranslation } from '../../shared/i18n';
 
 export function PdfInspectPage() {
+  const { t } = useTranslation();
   const [isProcessing, setIsProcessing] = useState(false);
   const [progressText, setProgressText] = useState<string | null>(null);
   const [result, setResult] = useState<PdfInspectionResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+
+  const getOcrStatusLabel = (status: OcrStatus): string => {
+    switch (status) {
+      case 'not-needed':
+        return t('pdfInspect.ocrStatus.notNeeded');
+      case 'pending':
+        return t('pdfInspect.ocrStatus.pending');
+      case 'processing':
+        return t('pdfInspect.ocrStatus.processing');
+      case 'completed':
+        return t('pdfInspect.ocrStatus.completed');
+      case 'failed':
+        return t('pdfInspect.ocrStatus.failed');
+    }
+  };
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -48,19 +57,26 @@ export function PdfInspectPage() {
         onProgress: (progress: PdfInspectionProgress) => {
           setProgressText(
             progress.phase === 'ocr'
-              ? `OCR läuft: Seite ${progress.currentPage} von ${progress.ocrPageCount} (${progress.pageCount} Seiten insgesamt)`
-              : `Text wird gelesen: Seite ${progress.currentPage} von ${progress.pageCount}`,
+              ? t('documents.processingProgress.ocrRunning', {
+                  currentPage: progress.currentPage,
+                  ocrPageCount: progress.ocrPageCount,
+                  pageCount: progress.pageCount,
+                })
+              : t('documents.processingProgress.readingText', {
+                  currentPage: progress.currentPage,
+                  pageCount: progress.pageCount,
+                }),
           );
         },
       });
       setResult(inspection);
     } catch (err: unknown) {
       if (err instanceof PdfCancellationError) {
-        setError('Verarbeitung abgebrochen.');
+        setError(t('pdfInspect.errorCancelled'));
       } else if (err instanceof PdfInspectionError) {
         setError(err.message);
       } else {
-        setError('Ein unbekannter Fehler ist aufgetreten.');
+        setError(t('pdfInspect.errorUnknown'));
       }
     } finally {
       setIsProcessing(false);
@@ -80,9 +96,9 @@ export function PdfInspectPage() {
           <FileSearch className="w-5 h-5" />
         </div>
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">PDF-Inspektion</h1>
+          <h1 className="text-2xl font-semibold text-slate-900">{t('pdfInspect.title')}</h1>
           <p className="text-sm text-slate-500">
-            Entwicklungswerkzeug: lokale Textextraktion und OCR, nichts verlässt den Browser.
+            {t('pdfInspect.subtitle')}
           </p>
         </div>
       </div>
@@ -107,11 +123,11 @@ export function PdfInspectPage() {
           ) : (
             <FileSearch className="w-4 h-4" />
           )}
-          {isProcessing ? 'Verarbeitung läuft…' : 'PDF auswählen und inspizieren'}
+          {isProcessing ? t('pdfInspect.processing') : t('pdfInspect.selectAndInspect')}
         </Button>
         {isProcessing && (
           <Button variant="secondary" onClick={handleCancel}>
-            Abbrechen
+            {t('pdfInspect.cancel')}
           </Button>
         )}
         {progressText && <span className="text-sm text-slate-500">{progressText}</span>}
@@ -127,34 +143,34 @@ export function PdfInspectPage() {
         <div className="space-y-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="p-4 bg-white border border-slate-200 rounded-lg">
-              <p className="text-xs text-slate-500">Seiten</p>
+              <p className="text-xs text-slate-500">{t('pdfInspect.pages')}</p>
               <p className="text-lg font-semibold text-slate-900">{result.pageCount}</p>
             </div>
             <div className="p-4 bg-white border border-slate-200 rounded-lg">
-              <p className="text-xs text-slate-500">Verwertbarer Text</p>
+              <p className="text-xs text-slate-500">{t('pdfInspect.usableText')}</p>
               <p className="text-lg font-semibold text-slate-900">
-                {result.hasUsableText ? 'Ja' : 'Nein'}
+                {result.hasUsableText ? t('pdfInspect.yes') : t('pdfInspect.no')}
               </p>
             </div>
           </div>
 
           <section className="space-y-3">
-            <h2 className="text-lg font-medium text-slate-900">Seiten</h2>
+            <h2 className="text-lg font-medium text-slate-900">{t('pdfInspect.pages')}</h2>
             {result.pages.map((page) => (
               <div key={page.pageNumber} className="p-4 bg-white border border-slate-200 rounded-lg">
                 <div className="flex items-center gap-2 mb-2 flex-wrap">
-                  <span className="font-medium text-slate-900">Seite {page.pageNumber}</span>
+                  <span className="font-medium text-slate-900">{t('pdfInspect.pageLabel', { page: page.pageNumber })}</span>
                   <span
                     className={`text-xs px-2 py-0.5 rounded-full ${
                       page.quality.usable ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
                     }`}
                   >
                     {page.quality.usable
-                      ? 'Textebene verwertbar'
-                      : `Textebene nicht verwertbar: ${page.quality.reasons.join(', ')}`}
+                      ? t('pdfInspect.textLayerUsable')
+                      : t('pdfInspect.textLayerNotUsable', { reasons: page.quality.reasons.join(', ') })}
                   </span>
                   <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">
-                    {OCR_STATUS_LABELS[page.ocrStatus]}
+                    {getOcrStatusLabel(page.ocrStatus)}
                   </span>
                 </div>
                 <pre className="text-xs text-slate-700 bg-slate-50 rounded p-3 max-h-48 overflow-auto whitespace-pre-wrap">
@@ -162,7 +178,7 @@ export function PdfInspectPage() {
                 </pre>
                 {page.ocrText !== null && (
                   <>
-                    <p className="text-xs text-slate-500 mt-2 mb-1">OCR-Text</p>
+                    <p className="text-xs text-slate-500 mt-2 mb-1">{t('pdfInspect.ocrTextLabel')}</p>
                     <pre className="text-xs text-slate-700 bg-slate-50 rounded p-3 max-h-48 overflow-auto whitespace-pre-wrap">
                       {page.ocrText}
                     </pre>
@@ -174,17 +190,17 @@ export function PdfInspectPage() {
 
           <section className="space-y-3">
             <h2 className="text-lg font-medium text-slate-900">
-              Annotationen ({result.annotations.length})
+              {t('pdfInspect.annotations', { count: result.annotations.length })}
             </h2>
             {result.annotations.length === 0 ? (
-              <p className="text-sm text-slate-500">Keine Annotationen gefunden.</p>
+              <p className="text-sm text-slate-500">{t('pdfInspect.noAnnotations')}</p>
             ) : (
               <div className="space-y-2">
                 {result.annotations.map((annotation, index) => (
                   <div key={index} className="p-3 bg-white border border-slate-200 rounded-lg text-sm">
                     <div className="flex items-center gap-2 flex-wrap mb-1">
                       <span className="font-medium text-slate-900">
-                        Seite {annotation.pageNumber}
+                        {t('pdfInspect.pageLabel', { page: annotation.pageNumber })}
                       </span>
                       <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
                         {annotation.type}
@@ -196,8 +212,12 @@ export function PdfInspectPage() {
                       )}
                       {annotation.rect && (
                         <span className="text-xs text-slate-500">
-                          Rechteck: x={annotation.rect.x}, y={annotation.rect.y},{' '}
-                          {annotation.rect.width}×{annotation.rect.height}
+                          {t('pdfInspect.rect', {
+                            x: annotation.rect.x,
+                            y: annotation.rect.y,
+                            width: annotation.rect.width,
+                            height: annotation.rect.height,
+                          })}
                         </span>
                       )}
                     </div>

@@ -1,11 +1,12 @@
 import React, { useEffect, useRef } from 'react';
-import { X, Sparkles, Loader2, BookOpen, Tag, Calendar, FileText } from 'lucide-react';
-import type { DocumentUnderstanding } from '../../../application/use-cases/documentUnderstanding';
+import { X, Sparkles, Loader2, BookOpen, Tag, Calendar } from 'lucide-react';
+import type { DocumentUnderstanding, DocumentType } from '../../../application/use-cases/documentUnderstanding';
 import { DOCUMENT_TYPE_LABELS } from '../../../application/use-cases/documentUnderstanding';
 import type { DocumentContent } from '../../../application/use-cases/documentContent';
 import { DocumentStructure } from './DocumentStructure';
 import { Button } from '../Button';
 import { formatDate } from '../../../shared/utils/format';
+import { useTranslation } from '../../../shared/i18n';
 
 export interface DocumentInfoModalProps {
   isOpen: boolean;
@@ -32,6 +33,7 @@ export function DocumentInfoModal({
   isAnalyzing,
   onAnalyze,
 }: DocumentInfoModalProps) {
+  const { t } = useTranslation();
   const modalRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -51,6 +53,11 @@ export function DocumentInfoModal({
     if (modalRef.current && !modalRef.current.contains(e.target as Node)) {
       onClose();
     }
+  };
+
+  const getDocTypeLabel = (docType: DocumentType) => {
+    const key = `documents.types.${docType}`;
+    return t(key, {}, DOCUMENT_TYPE_LABELS[docType] ?? t('infoModal.defaultType'));
   };
 
   return (
@@ -73,7 +80,7 @@ export function DocumentInfoModal({
             </div>
             <div className="min-w-0">
               <h3 id="document-info-title" className="text-sm sm:text-base font-semibold text-slate-900 truncate">
-                Dokument-Übersicht
+                {t('infoModal.title')}
               </h3>
               <p className="text-xs text-slate-500 truncate">{documentName}</p>
             </div>
@@ -82,7 +89,7 @@ export function DocumentInfoModal({
             type="button"
             onClick={onClose}
             className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md transition-colors cursor-pointer shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
-            aria-label="Schließen"
+            aria-label={t('infoModal.closeAria')}
           >
             <X className="w-4 h-4" />
           </button>
@@ -95,11 +102,11 @@ export function DocumentInfoModal({
               {/* Type and Subject badges */}
               <div className="flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200/60">
-                  {DOCUMENT_TYPE_LABELS[understanding.documentType] ?? 'Dokument'}
+                  {getDocTypeLabel(understanding.documentType)}
                 </span>
                 {understanding.subject && (
                   <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
-                    Fach: {understanding.subject}
+                    {t('infoModal.subjectPrefix', { subject: understanding.subject })}
                   </span>
                 )}
               </div>
@@ -108,7 +115,7 @@ export function DocumentInfoModal({
               {understanding.title && (
                 <div>
                   <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
-                    Titel / Thema
+                    {t('infoModal.titleTheme')}
                   </h4>
                   <p className="text-sm font-medium text-slate-900">{understanding.title}</p>
                 </div>
@@ -117,7 +124,7 @@ export function DocumentInfoModal({
               {/* Summary */}
               <div>
                 <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
-                  Kurzbeschreibung
+                  {t('infoModal.summaryTitle')}
                 </h4>
                 <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 text-xs text-slate-700 leading-relaxed">
                   {understanding.summary}
@@ -129,7 +136,7 @@ export function DocumentInfoModal({
                 <div>
                   <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                     <Tag className="w-3.5 h-3.5 text-slate-400" />
-                    Schlüsselbegriffe
+                    {t('infoModal.keyConcepts')}
                   </h4>
                   <div className="flex flex-wrap gap-1.5">
                     {understanding.keyTopics.map((topic, i) => (
@@ -148,7 +155,7 @@ export function DocumentInfoModal({
               <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
                 <span className="flex items-center gap-1">
                   <Calendar className="w-3.5 h-3.5" />
-                  Analysiert am {formatDate(new Date(understanding.analyzedAt))}
+                  {t('infoModal.analyzedAt', { date: formatDate(new Date(understanding.analyzedAt)) })}
                 </span>
                 <button
                   type="button"
@@ -156,7 +163,7 @@ export function DocumentInfoModal({
                   onClick={onAnalyze}
                   className="text-blue-600 hover:text-blue-700 hover:underline cursor-pointer disabled:opacity-50 text-xs"
                 >
-                  {isAnalyzing ? 'Wird aktualisiert…' : 'Analyse aktualisieren'}
+                  {isAnalyzing ? t('infoModal.updating') : t('infoModal.updateAnalysis')}
                 </button>
               </div>
             </>
@@ -167,11 +174,10 @@ export function DocumentInfoModal({
               </div>
               <div className="max-w-xs mx-auto">
                 <h4 className="text-sm font-medium text-slate-900 mb-1">
-                  Noch keine Analyse vorhanden
+                  {t('infoModal.noAnalysisTitle')}
                 </h4>
                 <p className="text-xs text-slate-500">
-                  Lass das Dokument semantisch analysieren, um Titel, Typ, Fach, Kurzbeschreibung und
-                  wichtige Schlüsselbegriffe zu erfassen.
+                  {t('infoModal.noAnalysisDesc')}
                 </p>
               </div>
               <div className="pt-2">
@@ -184,12 +190,12 @@ export function DocumentInfoModal({
                   {isAnalyzing ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      Analysiere Dokument…
+                      {t('infoModal.analyzingDoc')}
                     </>
                   ) : (
                     <>
                       <Sparkles className="w-4 h-4" />
-                      Dokument analysieren
+                      {t('infoModal.analyzeDoc')}
                     </>
                   )}
                 </Button>
@@ -211,7 +217,7 @@ export function DocumentInfoModal({
         {/* Footer */}
         <div className="px-5 py-3 border-t border-slate-200 bg-slate-50/50 flex justify-end">
           <Button variant="secondary" onClick={onClose}>
-            Schließen
+            {t('infoModal.closeBtn')}
           </Button>
         </div>
       </div>

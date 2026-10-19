@@ -7,6 +7,7 @@ import {
   moveDocument,
   renameDocument,
 } from '../../application/use-cases/documents';
+import { useTranslation } from '../../shared/i18n';
 
 interface UseDocumentActionsOptions {
   // When set, a document moved to a different topic is removed from the list
@@ -26,6 +27,7 @@ export function useDocumentActions(
   setDocuments: Dispatch<SetStateAction<Document[]>>,
   options: UseDocumentActionsOptions = {},
 ) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [actionError, setActionError] = useState<string | null>(null);
   const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
@@ -50,7 +52,7 @@ export function useDocumentActions(
       setDocuments(prev => prev.filter(d => d.id !== docId));
     } catch (err) {
       console.error('Failed to delete document', err);
-      setActionError('Fehler beim Löschen des Dokuments. Bitte versuche es erneut.');
+      setActionError(t('documents.deleteError'));
     } finally {
       setDeletingDocId(null);
     }
