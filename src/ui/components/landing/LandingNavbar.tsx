@@ -19,7 +19,13 @@ export function LandingNavbar() {
           className="flex items-center text-slate-900 hover:opacity-90 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 rounded-md py-1"
           aria-label={t('landing.navbar.brandAria')}
         >
-          <img src={logoUrl} alt="Materia" className="h-7 sm:h-8 w-auto object-contain" />
+          <img
+            src={logoUrl}
+            alt="Materia"
+            fetchPriority="high"
+            decoding="async"
+            className="h-7 sm:h-8 w-auto object-contain"
+          />
         </a>
 
         {/* Navigation Anchors */}

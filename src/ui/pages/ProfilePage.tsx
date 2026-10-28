@@ -35,7 +35,7 @@ export function ProfilePage() {
 
   useEffect(() => {
     async function loadData() {
-      if (!user) return;
+      if (!user?.id) return;
       try {
         setIsTaxonomyLoading(true);
         const [loadedSubjects, loadedTopics] = await Promise.all([
@@ -51,7 +51,7 @@ export function ProfilePage() {
       }
     }
     void loadData();
-  }, [user]);
+  }, [user?.id]);
 
   const {
     isLoading: isProgressLoading,

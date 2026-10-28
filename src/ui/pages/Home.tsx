@@ -285,9 +285,11 @@ export function Home() {
   const [selectedTopicId, setSelectedTopicId] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  const loadData = async () => {
-    if (!user || isAuthLoading) return;
-    setIsLoading(true);
+  const loadData = async (silent = false) => {
+    if (!user?.id || isAuthLoading) return;
+    if (!silent) {
+      setIsLoading(true);
+    }
     setError(null);
     try {
       searchableDocsRef.current = null;
@@ -303,25 +305,27 @@ export function Home() {
       console.error('Failed to load library data', err);
       setError('Fehler beim Laden der Dokumentenbibliothek. Bitte versuche es später erneut.');
     } finally {
-      setIsLoading(false);
+      if (!silent) {
+        setIsLoading(false);
+      }
     }
   };
 
   useEffect(() => {
     if (!isAuthLoading) {
-      loadData();
+      void loadData(false);
     }
-  }, [user, isAuthLoading]);
+  }, [user?.id, isAuthLoading]);
 
   useEffect(() => {
     const handleSubjectsChanged = () => {
-      void loadData();
+      void loadData(true);
     };
     window.addEventListener(SUBJECTS_CHANGED_EVENT, handleSubjectsChanged);
     return () => {
       window.removeEventListener(SUBJECTS_CHANGED_EVENT, handleSubjectsChanged);
     };
-  }, [user, isAuthLoading]);
+  }, [user?.id, isAuthLoading]);
 
   useEffect(() => {
     searchableDocsRef.current = null;
@@ -385,7 +389,7 @@ export function Home() {
     return () => {
       isCancelled = true;
     };
-  }, [debouncedQuery, user]);
+  }, [debouncedQuery, user?.id]);
 
   // Lookup maps for O(1) in-memory resolution
   const subjectsMap = useMemo(() => {
@@ -452,7 +456,7 @@ export function Home() {
         <h3 className="text-base font-medium text-red-900 mb-1">{t('dialogs.common.genericError')}</h3>
         <p className="text-sm text-red-700 max-w-md mb-4">{error}</p>
         <button
-          onClick={loadData}
+          onClick={() => void loadData(false)}
           className="px-4 py-2 bg-white border border-slate-300 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-50 transition-colors cursor-pointer"
         >
           {t('documents.retryProcessing')}

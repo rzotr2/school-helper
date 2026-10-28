@@ -117,9 +117,12 @@ export function LearnPage() {
   const hasPersistedResultsRef = useRef(false);
   const persistedTaskIdsRef = useRef<Set<string>>(new Set());
 
+  const paramSubjectId = searchParams.get('subjectId');
+  const paramTopicId = searchParams.get('topicId');
+
   useEffect(() => {
     async function loadTaxonomy() {
-      if (!user || isAuthLoading) return;
+      if (!user?.id || isAuthLoading) return;
       try {
         setIsLoadingTaxonomy(true);
         const [loadedSubjects, loadedTopics, loadedDocs] = await Promise.all([
@@ -130,9 +133,6 @@ export function LearnPage() {
         setSubjects(loadedSubjects);
         setTopics(loadedTopics);
         setDocuments(loadedDocs);
-
-        const paramSubjectId = searchParams.get('subjectId');
-        const paramTopicId = searchParams.get('topicId');
 
         if (paramTopicId) {
           const matchingTopic = loadedTopics.find((t) => t.id === paramTopicId);
@@ -156,7 +156,7 @@ export function LearnPage() {
       }
     }
     void loadTaxonomy();
-  }, [user, isAuthLoading, searchParams]);
+  }, [user?.id, isAuthLoading, paramSubjectId, paramTopicId]);
 
   // Document counts per topic (total and completed)
   const topicDocumentCounts = useMemo(() => {

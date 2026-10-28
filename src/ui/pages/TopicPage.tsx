@@ -157,7 +157,7 @@ export function TopicPage() {
     if (!isAuthLoading) {
       loadData();
     }
-  }, [user, subjectId, topicId, navigate, isAuthLoading, t]);
+  }, [user?.id, subjectId, topicId, navigate, isAuthLoading]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

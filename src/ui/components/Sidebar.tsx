@@ -35,10 +35,12 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const location = useLocation();
 
-  const loadData = async () => {
-    if (!user || isAuthLoading) return;
+  const loadData = async (silent = false) => {
+    if (!user?.id || isAuthLoading) return;
     try {
-      setIsLoading(true);
+      if (!silent) {
+        setIsLoading(true);
+      }
       // Check for school profile first, create if missing
       const profile = await getSchoolProfile(user.id);
       if (!profile) {
@@ -54,19 +56,21 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
     } catch (error) {
       console.error("Failed to load subjects and topics:", error);
     } finally {
-      setIsLoading(false);
+      if (!silent) {
+        setIsLoading(false);
+      }
     }
   };
 
   useEffect(() => {
     if (!isAuthLoading) {
-      loadData();
+      void loadData(false);
     }
-  }, [user, isAuthLoading]);
+  }, [user?.id, isAuthLoading]);
 
   useEffect(() => {
     const handleDataChanged = () => {
-      void loadData();
+      void loadData(true);
     };
     window.addEventListener(SUBJECTS_CHANGED_EVENT, handleDataChanged);
     window.addEventListener(TOPICS_CHANGED_EVENT, handleDataChanged);
@@ -74,7 +78,7 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
       window.removeEventListener(SUBJECTS_CHANGED_EVENT, handleDataChanged);
       window.removeEventListener(TOPICS_CHANGED_EVENT, handleDataChanged);
     };
-  }, [user, isAuthLoading]);
+  }, [user?.id, isAuthLoading]);
 
   // Group topics by subject ID
   const topicsBySubject = useMemo(() => {

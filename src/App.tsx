@@ -81,20 +81,22 @@ export default function App() {
                 }
               />
               {/* Development tool for the local PDF inspection pipeline (not in the sidebar). */}
-              <Route
-                path="pdf-inspect"
-                element={
-                  <Suspense
-                    fallback={
-                      <div className="flex items-center justify-center min-h-[400px]">
-                        <div className="w-8 h-8 rounded-full border-2 border-slate-200 border-t-blue-600 animate-spin" />
-                      </div>
-                    }
-                  >
-                    <PdfInspectPage />
-                  </Suspense>
-                }
-              />
+              {import.meta.env.DEV && (
+                <Route
+                  path="pdf-inspect"
+                  element={
+                    <Suspense
+                      fallback={
+                        <div className="flex items-center justify-center min-h-[400px]">
+                          <div className="w-8 h-8 rounded-full border-2 border-slate-200 border-t-blue-600 animate-spin" />
+                        </div>
+                      }
+                    >
+                      <PdfInspectPage />
+                    </Suspense>
+                  }
+                />
+              )}
             </Route>
 
             {/* Catch-all fallback */}

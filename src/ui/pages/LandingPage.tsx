@@ -13,9 +13,23 @@ export function LandingPage() {
   const { t } = useTranslation();
 
   useEffect(() => {
-    // Set landing page document title
     const originalTitle = document.title;
-    document.title = t('landing.title');
+    const title = t('landing.title');
+    const description = t('landing.hero.description');
+    document.title = title;
+
+    const metaDesc = document.querySelector('meta[name="description"]');
+    const ogTitle = document.querySelector('meta[property="og:title"]');
+    const ogDesc = document.querySelector('meta[property="og:description"]');
+    const twitterTitle = document.querySelector('meta[name="twitter:title"]');
+    const twitterDesc = document.querySelector('meta[name="twitter:description"]');
+
+    if (metaDesc) metaDesc.setAttribute('content', description);
+    if (ogTitle) ogTitle.setAttribute('content', title);
+    if (ogDesc) ogDesc.setAttribute('content', description);
+    if (twitterTitle) twitterTitle.setAttribute('content', title);
+    if (twitterDesc) twitterDesc.setAttribute('content', description);
+
     return () => {
       document.title = originalTitle;
     };

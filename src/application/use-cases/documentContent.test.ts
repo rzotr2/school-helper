@@ -824,4 +824,22 @@ describe('DocumentSections persistence and accessors', () => {
       annotation: { content: 'Notiz', type: 'TEXT', y: 450 },
     });
   });
+
+  it('strips PostgreSQL-incompatible NUL characters (\\u0000) to prevent PostgREST 22P05 errors', () => {
+    const rawInspection = inspection([
+      inspectionPage({
+        nativeText: 'Kapitel\u0000 1: Grundlagen\u0000',
+        ocrText: 'OCR\u0000 Text',
+        ocrStatus: 'completed',
+        blocks: [{ text: 'Kapitel\u0000 1: Grundlagen', type: 'heading', y: 700 }],
+      }),
+    ]);
+
+    const content = inspectionToDocumentContent(rawInspection);
+    expect(content.pages[0].nativeText).toBe('Kapitel 1: Grundlagen');
+    expect(content.pages[0].ocrText).toBe('OCR Text');
+    expect(content.pages[0].blocks?.[0].text).toBe('Kapitel 1: Grundlagen');
+    expect(content.sections?.[0].title).toBe('Kapitel 1: Grundlagen');
+    expect(JSON.stringify(content)).not.toContain('\\u0000');
+  });
 });

@@ -7,12 +7,14 @@ coverage/
 .env*
 !.env.example
 
-# AI tooling (never committed)
+# AI & IDE tooling (never committed)
 .claude/
 CLAUDE.md
 AGENTS.md
 .cursor/
 .gemini/
+.idea/
+.vercel/
 
 # Tesseract.js language data cache (downloaded at runtime)
 *.traineddata

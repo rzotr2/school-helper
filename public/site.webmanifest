@@ -1,0 +1,21 @@
+{
+  "name": "Materia — Digital School Workspace",
+  "short_name": "Materia",
+  "description": "Organize your school materials by subjects and topics, capture content via OCR, and learn interactively with source-grounded quizzes and flashcards.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/logo-icon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

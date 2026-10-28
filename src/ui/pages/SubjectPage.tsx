@@ -65,7 +65,7 @@ export function SubjectPage() {
     if (!isAuthLoading) {
       loadData();
     }
-  }, [user, subjectId, navigate, isAuthLoading]);
+  }, [user?.id, subjectId, navigate, isAuthLoading]);
 
   const handleEditSubject = async (name: string) => {
     if (!user || !subject) return;

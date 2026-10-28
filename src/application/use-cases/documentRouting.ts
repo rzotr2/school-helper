@@ -9,6 +9,8 @@ import {
   getDeepSeekApiKey,
   type DocumentUnderstanding,
 } from './documentUnderstanding';
+import { AIFactory } from '../../infrastructure/ai/AIFactory';
+import { DeepSeekProvider } from '../../infrastructure/ai/DeepSeekProvider';
 
 export interface UserTaxonomyTopic {
   id: string;
@@ -152,6 +154,10 @@ export function validateRoutingResponse(
   };
 }
 
+/**
+ * DeepSeek chat completions endpoint.
+ * @deprecated Use AIProvider instead
+ */
 const DEEPSEEK_ENDPOINT =
   typeof window !== 'undefined' && window.location.origin.includes('localhost')
     ? '/api/deepseek/chat/completions'
@@ -167,12 +173,7 @@ export async function callDeepSeekRouting(
   preparedText: string,
   apiKey?: string,
 ): Promise<DocumentRoutingRecommendation> {
-  const key = apiKey || getDeepSeekApiKey();
-  if (!key) {
-    throw new Error(
-      'DeepSeek API Key fehlt. Bitte trage VITE_DEEPSEEK_API_KEY in deiner .env Datei ein.',
-    );
-  }
+  const provider = apiKey ? new DeepSeekProvider(apiKey) : AIFactory.getProvider();
 
   const systemPrompt = `You are an educational assistant classifying a student's document into their existing subject and topic taxonomy.
 You may ONLY select subject and topic IDs from the supplied taxonomy.
@@ -207,40 +208,22 @@ ${understanding ? `Titel: ${understanding.title ?? '-'}\nFachgebiet: ${understan
 Auszug aus dem Dokumententext:
 ${preparedText.slice(0, 15000)}`;
 
-  const response = await fetch(DEEPSEEK_ENDPOINT, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${key}`,
-    },
-    body: JSON.stringify({
-      model: 'deepseek-chat',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      response_format: { type: 'json_object' },
+  const rawContent = await provider.chatCompletion(
+    [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
+    {
+      responseFormat: 'json_object',
       temperature: 0.1,
-      stream: false,
-    }),
-  });
-
-  if (!response.ok) {
-    const errText = await response.text().catch(() => '');
-    throw new Error(`DeepSeek API Fehler (${response.status}): ${errText || response.statusText}`);
-  }
-
-  const data = await response.json();
-  const rawContent = data.choices?.[0]?.message?.content;
-  if (!rawContent) {
-    throw new Error('Keine Antwort von DeepSeek erhalten');
-  }
+    },
+  );
 
   let parsed: unknown;
   try {
     parsed = JSON.parse(rawContent);
   } catch {
-    throw new Error('Ungültiges JSON-Format von DeepSeek empfangen');
+    throw new Error(`Ungültiges JSON-Format von ${provider.name} empfangen`);
   }
 
   return validateRoutingResponse(parsed, taxonomy);

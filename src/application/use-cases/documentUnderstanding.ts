@@ -1,6 +1,8 @@
 import { supabase } from '../../infrastructure/supabase/client';
 import type { Json } from '../../infrastructure/supabase/database.types';
 import type { DocumentContent, PageContent } from './documentContent';
+import { AIFactory } from '../../infrastructure/ai/AIFactory';
+import { DeepSeekProvider } from '../../infrastructure/ai/DeepSeekProvider';
 
 /**
  * Standard classification types for school/study materials.
@@ -225,18 +227,22 @@ export function validateDocumentUnderstanding(raw: unknown): DocumentUnderstandi
   };
 }
 
-import { parseDocumentContent } from './documentContent';
+import { parseDocumentContent, sanitizeForPostgresJson } from './documentContent';
 
 /**
  * DeepSeek chat completions endpoint.
  * In browser development (Vite dev server), uses local proxy '/api/deepseek/chat/completions'
  * to avoid CORS restrictions. In production or non-browser, calls 'https://api.deepseek.com/chat/completions'.
+ * @deprecated Use AIProvider instead
  */
-const DEEPSEEK_ENDPOINT =
+export const DEEPSEEK_ENDPOINT =
   typeof window !== 'undefined' && window.location.origin.includes('localhost')
     ? '/api/deepseek/chat/completions'
     : 'https://api.deepseek.com/chat/completions';
 
+/**
+ * @deprecated Use AIFactory.getProvider() instead
+ */
 export function getDeepSeekApiKey(): string {
   const envKey = (import.meta as any).env?.VITE_DEEPSEEK_API_KEY;
   if (typeof envKey === 'string' && envKey.trim()) {
@@ -254,12 +260,7 @@ export async function analyzeDocumentWithDeepSeek(
   preparedText: string,
   apiKey?: string,
 ): Promise<DocumentUnderstanding> {
-  const key = apiKey || getDeepSeekApiKey();
-  if (!key) {
-    throw new Error(
-      'DeepSeek API Key fehlt. Bitte trage VITE_DEEPSEEK_API_KEY in deiner .env Datei ein.',
-    );
-  }
+  const provider = apiKey ? new DeepSeekProvider(apiKey) : AIFactory.getProvider();
 
   const systemPrompt = `You are an educational assistant analyzing a student's study document.
 Analyze the provided document text and extract lightweight, clean semantic metadata.
@@ -280,47 +281,27 @@ Important:
 
   const userPrompt = `Dateiname: ${originalName}\n\nDokumententext:\n${preparedText}`;
 
-  const response = await fetch(DEEPSEEK_ENDPOINT, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${key}`,
-    },
-    body: JSON.stringify({
-      model: 'deepseek-chat',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      response_format: { type: 'json_object' },
+  const rawContent = await provider.chatCompletion(
+    [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
+    {
+      responseFormat: 'json_object',
       temperature: 0.2,
-      stream: false,
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => '');
-    throw new Error(
-      `DeepSeek API Fehler (${response.status}): ${errorText || response.statusText}`,
-    );
-  }
-
-  const data = await response.json();
-  const rawContent = data.choices?.[0]?.message?.content;
-  if (!rawContent) {
-    throw new Error('Keine Antwort von DeepSeek erhalten');
-  }
+    },
+  );
 
   let parsed: unknown;
   try {
     parsed = JSON.parse(rawContent);
   } catch {
-    throw new Error('Ungültiges JSON-Format von DeepSeek empfangen');
+    throw new Error(`Ungültiges JSON-Format von ${provider.name} empfangen`);
   }
 
   const validated = validateDocumentUnderstanding(parsed);
   if (!validated) {
-    throw new Error('Die von DeepSeek empfangenen Daten entsprechen nicht dem Schema');
+    throw new Error(`Die von ${provider.name} empfangenen Daten entsprechen nicht dem Schema`);
   }
 
   return validated;
@@ -402,10 +383,11 @@ async function runUnderstandDocument(
   );
 
   // 5. Update the document row with the validated understanding
+  const sanitizedUnderstanding = sanitizeForPostgresJson(validated);
   const { error: updateError } = await supabase
     .from('documents')
     .update({
-      understanding: validated as unknown as Json,
+      understanding: sanitizedUnderstanding as unknown as Json,
     })
     .eq('id', documentId);
 

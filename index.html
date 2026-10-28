@@ -3,19 +3,69 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Materia — Digitaler Schul-Workspace</title>
+    <title>Materia — Digital School Workspace | Digitaler Schul-Workspace</title>
+
+    <!-- Primary Meta Tags -->
+    <meta
+      name="description"
+      content="Organize your study materials by subjects and topics, analyze PDFs with OCR, and learn interactively with quizzes, flashcards, fill-in-the-blanks, and word banks. Dein digitaler Schul-Workspace für Berufsschule & Ausbildung."
+    />
+    <meta
+      name="keywords"
+      content="Materia, digital school workspace, study workspace, Berufsschule, Ausbildung, Lernplattform, PDF OCR, flashcards, Karteikarten, quiz, Lückentext, school organizer"
+    />
+    <meta name="author" content="Materia" />
+    <meta name="robots" content="index, follow" />
+    <meta name="theme-color" content="#2563eb" />
+
+    <!-- Icons & Web App Manifest -->
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/logo-icon.png" />
-    <meta name="description" content="A personal digital school workspace for Berufsschule students" />
-    <meta property="og:title" content="Materia — Digitaler Schul-Workspace" />
-    <meta property="og:description" content="A personal digital school workspace for Berufsschule students" />
-    <meta property="og:image" content="/logo.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+
+    <!-- Open Graph / Facebook / LinkedIn / WhatsApp / Telegram -->
     <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Materia" />
+    <meta property="og:title" content="Materia — Digital School Workspace" />
+    <meta
+      property="og:description"
+      content="Structure your school PDFs by subjects and topics, capture content automatically, and study with source-grounded quizzes, flashcards, and exercises."
+    />
+    <meta property="og:image" content="/logo-full.png" />
+    <meta property="og:image:alt" content="Materia — Digital School Workspace" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:locale:alternate" content="de_DE" />
+
+    <!-- Twitter / X Cards -->
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Materia — Digital School Workspace" />
+    <meta
+      name="twitter:description"
+      content="Structure your school PDFs by subjects and topics, capture content automatically, and study with source-grounded quizzes, flashcards, and exercises."
+    />
+    <meta name="twitter:image" content="/logo-full.png" />
+
+    <!-- Structured Data (Schema.org JSON-LD) -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "Materia",
+        "alternateName": "Materia — Digital School Workspace",
+        "applicationCategory": "EducationalApplication",
+        "operatingSystem": "Web",
+        "inLanguage": ["en", "de"],
+        "description": "Digital school workspace for organizing PDF study materials by subjects and topics, extracting structured summaries via OCR, and practicing with source-grounded quizzes, flashcards, fill-in-the-blanks, and matching exercises.",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "EUR"
+        }
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-

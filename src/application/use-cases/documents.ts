@@ -4,7 +4,12 @@ import type {
   DocumentProcessingStatus,
   Json,
 } from '../../infrastructure/supabase/database.types';
-import { parseDocumentContent, parseProcessingStatus, type DocumentContent } from './documentContent';
+import {
+  parseDocumentContent,
+  parseProcessingStatus,
+  sanitizeForPostgresJson,
+  type DocumentContent,
+} from './documentContent';
 import { validateDocumentUnderstanding, type DocumentUnderstanding } from './documentUnderstanding';
 
 export interface Document {
@@ -355,7 +360,7 @@ export async function updateDocumentProcessing(
       processing_status: update.processingStatus,
       ...(update.content === undefined
         ? {}
-        : { content: update.content as unknown as Json }),
+        : { content: sanitizeForPostgresJson(update.content) as unknown as Json }),
     })
     .eq('id', documentId)
     .select(DOCUMENT_COLUMNS_WITH_CONTENT)

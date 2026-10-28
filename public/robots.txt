@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+Allow: /landing
+Disallow: /learn
+Disallow: /profile
+Disallow: /subject/
+Disallow: /document/
+Disallow: /pdf-inspect
+Disallow: /api/
+
+Sitemap: /sitemap.xml

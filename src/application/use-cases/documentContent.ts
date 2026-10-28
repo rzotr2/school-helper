@@ -88,7 +88,35 @@ const PERSISTED_OCR_STATUSES: readonly PersistedOcrStatus[] = [
   'failed',
 ];
 
-// ── Validation ───────────────────────────────────────────────────────────────
+// ── Validation & Sanitization ────────────────────────────────────────────────
+
+/**
+ * Recursively strips NUL characters (\u0000) and repairs lone UTF-16 surrogates
+ * from all strings in a JSON-serializable value.
+ * PostgreSQL `jsonb` and `text` columns reject `\u0000` and unpaired surrogates
+ * with SQLSTATE 22P05 (`untranslatable_character` / `unsupported Unicode escape sequence`).
+ */
+export function sanitizeForPostgresJson<T>(value: T): T {
+  if (typeof value === 'string') {
+    const wellFormed = value
+      .replace(/\u0000/g, '')
+      .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '\uFFFD');
+    return wellFormed as unknown as T;
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeForPostgresJson(item)) as unknown as T;
+  }
+  if (typeof value === 'object' && value !== null) {
+    const result: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(value)) {
+      if (val !== undefined) {
+        result[sanitizeForPostgresJson(key)] = sanitizeForPostgresJson(val);
+      }
+    }
+    return result as T;
+  }
+  return value;
+}
 
 function isTextQuality(value: unknown): value is TextQuality {
   if (typeof value !== 'object' || value === null) return false;
@@ -455,10 +483,10 @@ export function inspectionToDocumentContent(inspection: PdfInspectionResult): Do
 
   const sections = buildDocumentSections(pages);
 
-  return {
+  return sanitizeForPostgresJson({
     pages,
     ...(sections.length > 0 ? { sections } : {}),
-  };
+  });
 }
 
 /**
@@ -512,7 +540,7 @@ export function persistedPageFromOcrUpdate(
   update: { ocrText: string | null; ocrStatus: PersistedOcrStatus },
   existingPage?: PageContent | null,
 ): PageContent {
-  return {
+  return sanitizeForPostgresJson({
     pageNumber: page.pageNumber,
     nativeText: page.nativeText,
     quality: page.quality,
@@ -520,7 +548,7 @@ export function persistedPageFromOcrUpdate(
     ocrStatus: update.ocrStatus,
     ...(page.blocks !== undefined ? { blocks: page.blocks } : {}),
     ...(existingPage?.annotations !== undefined ? { annotations: existingPage.annotations } : {}),
-  };
+  });
 }
 
 /** Inserts or replaces one page, keeping the pages ordered by page number. */
@@ -589,13 +617,15 @@ export async function saveDocumentContent(
 ): Promise<DocumentContent> {
   if (!userId) throw new Error('User must be authenticated');
 
+  const sanitizedContent = sanitizeForPostgresJson(content);
+
   // DocumentContent is JSON-serializable by construction (the persisted
   // shape is validated by parseDocumentContent); interfaces lack implicit
   // index signatures, hence the assertion to Json.
   const { error } = await supabase
     .from('documents')
     .update({
-      content: content as unknown as Json,
+      content: sanitizedContent as unknown as Json,
       processing_status: 'completed',
     })
     .eq('id', documentId);
@@ -605,7 +635,7 @@ export async function saveDocumentContent(
     throw new Error(error.message);
   }
 
-  return content;
+  return sanitizedContent;
 }
 
 /**
@@ -640,10 +670,12 @@ export async function saveDocumentPage(
     return null;
   }
 
+  const sanitizedMerged = sanitizeForPostgresJson(merged);
+
   const { error: updateError } = await supabase
     .from('documents')
     .update({
-      content: merged as unknown as Json,
+      content: sanitizedMerged as unknown as Json,
       processing_status: 'completed',
     })
     .eq('id', documentId);
@@ -653,5 +685,5 @@ export async function saveDocumentPage(
     throw new Error(updateError.message);
   }
 
-  return merged;
+  return sanitizedMerged;
 }

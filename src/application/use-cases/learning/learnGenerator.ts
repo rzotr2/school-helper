@@ -1,4 +1,6 @@
-import { getDeepSeekApiKey } from '../documentUnderstanding';
+import { getDeepSeekApiKey, DEEPSEEK_ENDPOINT } from '../documentUnderstanding';
+import { AIFactory } from '../../../infrastructure/ai/AIFactory';
+import { DeepSeekProvider } from '../../../infrastructure/ai/DeepSeekProvider';
 import type {
   FillInBlankTask,
   FlashcardTask,
@@ -701,12 +703,7 @@ export async function generateQuizTask(
     fetchFn = fetch,
   } = options;
 
-  const key = apiKey || getDeepSeekApiKey();
-  if (!key) {
-    throw new Error(
-      'DeepSeek API Key fehlt. Bitte trage VITE_DEEPSEEK_API_KEY in deiner .env Datei ein.',
-    );
-  }
+  const provider = apiKey ? new DeepSeekProvider(apiKey) : AIFactory.getProvider();
 
   if (!context.sources || context.sources.length === 0) {
     throw new Error(
@@ -774,42 +771,22 @@ ${formattedSources}`;
     userPrompt += `\n\nBEREITS GESTELLTE FRAGEN (BITTE EINE ANDERE FRAGE STELLEN):\n- ${avoidQuestions.slice(-5).join('\n- ')}`;
   }
 
-  const response = await fetchFn(DEEPSEEK_ENDPOINT, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${key}`,
+  const rawContent = await provider.chatCompletion(
+    [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
+    {
+      responseFormat: 'json_object',
+      temperature: 0.1,
     },
-    body: JSON.stringify({
-      model: 'deepseek-chat',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0.1, // low temperature to prevent hallucination
-      stream: false,
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => '');
-    throw new Error(
-      `DeepSeek API Fehler (${response.status}): ${errorText || response.statusText}`,
-    );
-  }
-
-  const data = await response.json();
-  const rawContent = data.choices?.[0]?.message?.content;
-  if (!rawContent) {
-    throw new Error('Keine Antwort von DeepSeek erhalten');
-  }
+  );
 
   let parsed: unknown;
   try {
     parsed = JSON.parse(rawContent);
   } catch {
-    throw new Error('Ungültiges JSON-Format von DeepSeek empfangen');
+    throw new Error(`Ungültiges JSON-Format von ${provider.name} empfangen`);
   }
 
   const allowedTopicIds = new Set(context.topicIds);
@@ -849,12 +826,7 @@ export async function generateFlashcardTask(
     fetchFn = fetch,
   } = options;
 
-  const key = apiKey || getDeepSeekApiKey();
-  if (!key) {
-    throw new Error(
-      'DeepSeek API Key fehlt. Bitte trage VITE_DEEPSEEK_API_KEY in deiner .env Datei ein.',
-    );
-  }
+  const provider = apiKey ? new DeepSeekProvider(apiKey) : AIFactory.getProvider();
 
   if (!context.sources || context.sources.length === 0) {
     throw new Error(
@@ -920,42 +892,22 @@ ${formattedSources}`;
     userPrompt += `\n\nBEREITS GESTELLTE FRAGEN (BITTE EINE ANDERE FRAGE/BEGRIFF WÄHLEN):\n- ${avoidQuestions.slice(-5).join('\n- ')}`;
   }
 
-  const response = await fetchFn(DEEPSEEK_ENDPOINT, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${key}`,
-    },
-    body: JSON.stringify({
-      model: 'deepseek-chat',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      response_format: { type: 'json_object' },
+  const rawContent = await provider.chatCompletion(
+    [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
+    {
+      responseFormat: 'json_object',
       temperature: 0.1,
-      stream: false,
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => '');
-    throw new Error(
-      `DeepSeek API Fehler (${response.status}): ${errorText || response.statusText}`,
-    );
-  }
-
-  const data = await response.json();
-  const rawContent = data.choices?.[0]?.message?.content;
-  if (!rawContent) {
-    throw new Error('Keine Antwort von DeepSeek erhalten');
-  }
+    },
+  );
 
   let parsed: unknown;
   try {
     parsed = JSON.parse(rawContent);
   } catch {
-    throw new Error('Ungültiges JSON-Format von DeepSeek empfangen');
+    throw new Error(`Ungültiges JSON-Format von ${provider.name} empfangen`);
   }
 
   const task = validateFlashcardTask(
@@ -1000,12 +952,7 @@ export async function generateFillInBlankTask(
     fetchFn = fetch,
   } = options;
 
-  const key = apiKey || getDeepSeekApiKey();
-  if (!key) {
-    throw new Error(
-      'DeepSeek API Key fehlt. Bitte trage VITE_DEEPSEEK_API_KEY in deiner .env Datei ein.',
-    );
-  }
+  const provider = apiKey ? new DeepSeekProvider(apiKey) : AIFactory.getProvider();
 
   if (!context.sources || context.sources.length === 0) {
     throw new Error(
@@ -1078,42 +1025,22 @@ ${formattedSources}`;
     userPrompt += `\n\nBEREITS GESTELLTE SÄTZE (BITTE EINEN ANDEREN FAKT/BEGRIFF WÄHLEN):\n- ${avoidSentences.slice(-5).join('\n- ')}`;
   }
 
-  const response = await fetchFn(DEEPSEEK_ENDPOINT, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${key}`,
-    },
-    body: JSON.stringify({
-      model: 'deepseek-chat',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      response_format: { type: 'json_object' },
+  const rawContent = await provider.chatCompletion(
+    [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
+    {
+      responseFormat: 'json_object',
       temperature: 0.1,
-      stream: false,
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => '');
-    throw new Error(
-      `DeepSeek API Fehler (${response.status}): ${errorText || response.statusText}`,
-    );
-  }
-
-  const data = await response.json();
-  const rawContent = data.choices?.[0]?.message?.content;
-  if (!rawContent) {
-    throw new Error('Keine Antwort von DeepSeek erhalten');
-  }
+    },
+  );
 
   let parsed: unknown;
   try {
     parsed = JSON.parse(rawContent);
   } catch {
-    throw new Error('Ungültiges JSON-Format von DeepSeek empfangen');
+    throw new Error(`Ungültiges JSON-Format von ${provider.name} empfangen`);
   }
 
   const task = validateFillInBlankTask(
@@ -1156,12 +1083,7 @@ export async function generateMatchingTask(
     fetchFn = fetch,
   } = options;
 
-  const key = apiKey || getDeepSeekApiKey();
-  if (!key) {
-    throw new Error(
-      'DeepSeek API Key fehlt. Bitte trage VITE_DEEPSEEK_API_KEY in deiner .env Datei ein.',
-    );
-  }
+  const provider = apiKey ? new DeepSeekProvider(apiKey) : AIFactory.getProvider();
 
   if (!context.sources || context.sources.length === 0) {
     throw new Error(
@@ -1256,42 +1178,22 @@ SCHWIERIGKEIT: ${difficulty}
 VERFÜGBARE QUELLEN:
 ${formattedSources}`;
 
-  const response = await fetchFn(DEEPSEEK_ENDPOINT, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${key}`,
-    },
-    body: JSON.stringify({
-      model: 'deepseek-chat',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      response_format: { type: 'json_object' },
+  const rawContent = await provider.chatCompletion(
+    [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
+    {
+      responseFormat: 'json_object',
       temperature: 0.1,
-      stream: false,
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => '');
-    throw new Error(
-      `DeepSeek API Fehler (${response.status}): ${errorText || response.statusText}`,
-    );
-  }
-
-  const data = await response.json();
-  const rawContent = data.choices?.[0]?.message?.content;
-  if (!rawContent) {
-    throw new Error('Keine Antwort von DeepSeek erhalten');
-  }
+    },
+  );
 
   let parsed: unknown;
   try {
     parsed = JSON.parse(rawContent);
   } catch {
-    throw new Error('Ungültiges JSON-Format von DeepSeek empfangen');
+    throw new Error(`Ungültiges JSON-Format von ${provider.name} empfangen`);
   }
 
   const task = validateMatchingTask(
@@ -1334,12 +1236,7 @@ export async function generateWordBankTask(
     fetchFn = fetch,
   } = options;
 
-  const key = apiKey || getDeepSeekApiKey();
-  if (!key) {
-    throw new Error(
-      'DeepSeek API Key fehlt. Bitte trage VITE_DEEPSEEK_API_KEY in deiner .env Datei ein.',
-    );
-  }
+  const provider = apiKey ? new DeepSeekProvider(apiKey) : AIFactory.getProvider();
 
   if (!context.sources || context.sources.length === 0) {
     throw new Error(
@@ -1434,42 +1331,22 @@ SCHWIERIGKEIT: ${difficulty}
 VERFÜGBARE QUELLEN:
 ${formattedSources}`;
 
-  const response = await fetchFn(DEEPSEEK_ENDPOINT, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${key}`,
-    },
-    body: JSON.stringify({
-      model: 'deepseek-chat',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      response_format: { type: 'json_object' },
+  const rawContent = await provider.chatCompletion(
+    [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
+    {
+      responseFormat: 'json_object',
       temperature: 0.1,
-      stream: false,
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => '');
-    throw new Error(
-      `DeepSeek API Fehler (${response.status}): ${errorText || response.statusText}`,
-    );
-  }
-
-  const data = await response.json();
-  const rawContent = data.choices?.[0]?.message?.content;
-  if (!rawContent) {
-    throw new Error('Keine Antwort von DeepSeek erhalten');
-  }
+    },
+  );
 
   let parsed: unknown;
   try {
     parsed = JSON.parse(rawContent);
   } catch {
-    throw new Error('Ungültiges JSON-Format von DeepSeek empfangen');
+    throw new Error(`Ungültiges JSON-Format von ${provider.name} empfangen`);
   }
 
   const task = validateWordBankTask(
